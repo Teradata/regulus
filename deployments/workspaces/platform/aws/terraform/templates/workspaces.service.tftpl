@@ -1,0 +1,24 @@
+[Unit]
+Description=workspaces
+After=docker.service
+Requires=docker.service
+StartLimitInterval=200
+StartLimitBurst=10
+
+[Service]
+TimeoutStartSec=0
+Restart=always
+RestartSec=2
+ExecStartPre=-/usr/bin/mkdir -p /etc/td
+ExecStartPre=-/usr/bin/docker exec %n stop || true
+ExecStartPre=-/usr/bin/docker rm %n || true
+ExecStartPre=/usr/bin/docker pull ${ workspaces_registry }/${ workspaces_repository }:${ workspaces_version }
+ExecStart=/usr/bin/docker run \
+    -e accept_license=Y \
+    -e PLATFORM=aws \
+    -v /etc/td:/etc/td \
+    -p ${ http_port }:3000 \
+    -p ${ grpc_port }:3282 \
+    --rm --name %n ${ workspaces_registry }/${ workspaces_repository }:${ workspaces_version } workspaces serve -v
+[Install]
+WantedBy=multi-user.target
