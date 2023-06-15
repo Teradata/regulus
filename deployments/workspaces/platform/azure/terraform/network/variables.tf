@@ -15,11 +15,11 @@ variable "subnet_name" {
 }
 
 variable "network_cidr" {
-  type = string
+  type    = string
   default = "10.1.0.0/16"
 }
 
 variable "subnet_cidr" {
-  type = string
+  type    = string
   default = "10.1.0.0/24"
 }

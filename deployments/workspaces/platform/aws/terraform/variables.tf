@@ -7,43 +7,48 @@ variable "subnet_id" {
 }
 
 variable "instance_type" {
-  type = string
+  type    = string
   default = "t3.large"
 }
 
 variable "key_name" {
   description = "name of existing ssh key to enable access to workspaces server"
-  type = string
-  default = null
+  type        = string
+  default     = null
 }
 
 variable "tags" {
-  type = map(string)
+  type    = map(string)
   default = {}
 }
 
 variable "workspaces_name" {
-  type = string
+  type    = string
   default = "workspaces"
 }
 
 variable "workspaces_registry" {
-  type = string
+  type    = string
   default = "teradata"
 }
 
 variable "workspaces_repository" {
-  type = string
+  type    = string
   default = "workspaces"
 }
 
 variable "workspaces_version" {
-  type = string
+  type    = string
   default = "latest"
 }
 
 variable "access_cidrs" {
-  type = list(string)
+  type    = list(string)
+  default = ["0.0.0.0/0"]
+}
+
+variable "egress_cidr" {
+  type    = list(string)
   default = ["0.0.0.0/0"]
 }
 
@@ -52,11 +57,11 @@ variable "monitoring_enabled" {
 }
 
 variable "http_port" {
-  type = number
+  type    = number
   default = 3000
 }
 
 variable "grpc_port" {
-  type = number
+  type    = number
   default = 3282
 }

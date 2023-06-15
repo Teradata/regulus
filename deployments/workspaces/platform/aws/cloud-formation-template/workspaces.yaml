@@ -185,14 +185,17 @@ Resources:
                 enabled: "true"
                 ensureRunning: "true"
     Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            Encrypted: true
       SubnetId: !Ref Subnet
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
+      DisableApiTermination: true
       SecurityGroupIds: [!GetAtt WorkspacesSecurityGroup.GroupId] 
       IamInstanceProfile: !Ref WorkspacesInstanceProfile
-      # Tags: 
-      #   - Name: !Ref WorkspacesName
       UserData:
         Fn::Base64: !Sub |
            #!/bin/bash -xe

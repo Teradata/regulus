@@ -4,16 +4,9 @@ param workspacesName string = 'workspaces'
 @description('Username for the workspaces service virtual machine.')
 param adminUsername string
 
-@description('Type of authentication to use on the Virtual Machine. SSH key is recommended.')
-@allowed([
-  'sshPublicKey'
-  'password'
-])
-param authenticationType string = 'password'
-
-@description('SSH Key or password for the Virtual Machine. SSH key is recommended.')
+@description('SSH public key value')
 @secure()
-param adminPasswordOrKey string
+param sshPublicKey string
 
 @description('Unique DNS Name for the Public IP used to access the Virtual Machine.')
 param dnsLabelPrefix string = toLower('${workspacesName}-${uniqueString(resourceGroup().id)}')
@@ -41,21 +34,17 @@ param subnetName string = 'Subnet'
 @description('Name of the Network Security Group')
 param networkSecurityGroupName string = 'SecGroupNet'
 
-@description('Security Type of the Virtual Machine.')
-@allowed([
-  'Standard'
-  'TrustedLaunch'
-])
-param securityType string = 'TrustedLaunch'
-
 @description('The CIDR ranges that can be used to communicate with the workspaces instance.')
-param accessCidrs array = ['0.0.0.0/0']
+param accessCidrs array
 
 @description('port to access the workspaces service UI.')
 param httpPort string = '3000'
 
 @description('port to access the workspaces service api.')
 param grpcPort string = '3282'
+
+@description('allow access the workspaces ssh port from the access cidr.')
+param sshAccess bool = false
 
 var imageReference = {
   'Ubuntu-1804': {
@@ -88,17 +77,10 @@ var linuxConfiguration = {
     publicKeys: [
       {
         path: '/home/${adminUsername}/.ssh/authorized_keys'
-        keyData: adminPasswordOrKey
+        keyData: sshPublicKey
       }
     ]
   }
-}
-var securityProfileJson = {
-  uefiSettings: {
-    secureBootEnabled: true
-    vTpmEnabled: true
-  }
-  securityType: securityType
 }
 
 var trustedExtensionName = 'GuestAttestation'
@@ -165,7 +147,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-0
         properties: {
           priority: 700
           protocol: 'Tcp'
-          access: 'Allow'
+          access: sshAccess ? 'Allow' : 'Deny'
           direction: 'Inbound'
           sourceAddressPrefixes: accessCidrs
           sourcePortRange: '*'
@@ -271,17 +253,23 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
     osProfile: {
       computerName: workspacesName
       adminUsername: adminUsername
-      adminPassword: adminPasswordOrKey
-      linuxConfiguration: ((authenticationType == 'password') ? null : linuxConfiguration)
+      linuxConfiguration: linuxConfiguration
     }
-    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : json('null'))
+    securityProfile: {
+      encryptionAtHost: true
+      securityType: 'TrustedLaunch'
+      uefiSettings: {
+        secureBootEnabled: true
+        vTpmEnabled: true
+      }
+    }
     userData: cloudInitData
   }
 }
 
 
 
-resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = if ((securityType == 'TrustedLaunch') && ((securityProfileJson.uefiSettings.secureBootEnabled == true) && (securityProfileJson.uefiSettings.vTpmEnabled == true))) {
+resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
   parent: vm
   name: trustedExtensionName
   location: location
@@ -330,7 +318,7 @@ resource newRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 }
 
 @description('Custom Role Name.')
-param customRoleName string = '914f5291-3c5f-4bcb-ba73-e6894efb15fe' // 'regulus-workspaces-wide'
+param customRoleName string = ''
 
 resource existingRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = if (customRoleName != '') {
   name: customRoleName

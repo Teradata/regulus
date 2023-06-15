@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.17.1.54307",
-      "templateHash": "9188654908791178919"
+      "version": "0.18.4.5664",
+      "templateHash": "12959106658477179816"
     }
   },
   "parameters": {
@@ -22,21 +22,10 @@
         "description": "Username for the workspaces service virtual machine."
       }
     },
-    "authenticationType": {
-      "type": "string",
-      "defaultValue": "password",
-      "allowedValues": [
-        "sshPublicKey",
-        "password"
-      ],
-      "metadata": {
-        "description": "Type of authentication to use on the Virtual Machine. SSH key is recommended."
-      }
-    },
-    "adminPasswordOrKey": {
+    "sshPublicKey": {
       "type": "securestring",
       "metadata": {
-        "description": "SSH Key or password for the Virtual Machine. SSH key is recommended."
+        "description": "SSH public key value"
       }
     },
     "dnsLabelPrefix": {
@@ -93,22 +82,8 @@
         "description": "Name of the Network Security Group"
       }
     },
-    "securityType": {
-      "type": "string",
-      "defaultValue": "TrustedLaunch",
-      "allowedValues": [
-        "Standard",
-        "TrustedLaunch"
-      ],
-      "metadata": {
-        "description": "Security Type of the Virtual Machine."
-      }
-    },
     "accessCidrs": {
       "type": "array",
-      "defaultValue": [
-        "0.0.0.0/0"
-      ],
       "metadata": {
         "description": "The CIDR ranges that can be used to communicate with the workspaces instance."
       }
@@ -127,9 +102,16 @@
         "description": "port to access the workspaces service api."
       }
     },
+    "sshAccess": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "allow access the workspaces ssh port from the access cidr."
+      }
+    },
     "customRoleName": {
       "type": "string",
-      "defaultValue": "914f5291-3c5f-4bcb-ba73-e6894efb15fe",
+      "defaultValue": "",
       "metadata": {
         "description": "Custom Role Name."
       }
@@ -169,17 +151,10 @@
         "publicKeys": [
           {
             "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
-            "keyData": "[parameters('adminPasswordOrKey')]"
+            "keyData": "[parameters('sshPublicKey')]"
           }
         ]
       }
-    },
-    "securityProfileJson": {
-      "uefiSettings": {
-        "secureBootEnabled": true,
-        "vTpmEnabled": true
-      },
-      "securityType": "[parameters('securityType')]"
     },
     "trustedExtensionName": "GuestAttestation",
     "trustedExtensionPublisher": "Microsoft.Azure.Security.LinuxAttestation",
@@ -237,7 +212,7 @@
             "properties": {
               "priority": 700,
               "protocol": "Tcp",
-              "access": "Allow",
+              "access": "[if(parameters('sshAccess'), 'Allow', 'Deny')]",
               "direction": "Inbound",
               "sourceAddressPrefixes": "[parameters('accessCidrs')]",
               "sourcePortRange": "*",
@@ -348,10 +323,16 @@
         "osProfile": {
           "computerName": "[parameters('workspacesName')]",
           "adminUsername": "[parameters('adminUsername')]",
-          "adminPassword": "[parameters('adminPasswordOrKey')]",
-          "linuxConfiguration": "[if(equals(parameters('authenticationType'), 'password'), null(), variables('linuxConfiguration'))]"
+          "linuxConfiguration": "[variables('linuxConfiguration')]"
         },
-        "securityProfile": "[if(equals(parameters('securityType'), 'TrustedLaunch'), variables('securityProfileJson'), json('null'))]",
+        "securityProfile": {
+          "encryptionAtHost": true,
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        },
         "userData": "[variables('cloudInitData')]"
       },
       "dependsOn": [
@@ -359,7 +340,6 @@
       ]
     },
     {
-      "condition": "[and(equals(parameters('securityType'), 'TrustedLaunch'), and(equals(variables('securityProfileJson').uefiSettings.secureBootEnabled, true()), equals(variables('securityProfileJson').uefiSettings.vTpmEnabled, true())))]",
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2022-03-01",
       "name": "[format('{0}/{1}', parameters('workspacesName'), variables('trustedExtensionName'))]",

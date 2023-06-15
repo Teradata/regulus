@@ -94,11 +94,11 @@ resource "azurerm_virtual_machine" "this" {
 }
 
 resource "azurerm_virtual_machine_extension" "this" {
-  name                 = join("-", [var.workspaces_name, "Docker", "Extension"])
-  virtual_machine_id   = azurerm_virtual_machine.this.id
-  publisher            = "Microsoft.Azure.Extensions"
-  type                 = "DockerExtension"
-  type_handler_version = "1.1"
-  auto_upgrade_minor_version =  true
-  tags = var.tags
+  name                       = join("-", [var.workspaces_name, "Docker", "Extension"])
+  virtual_machine_id         = azurerm_virtual_machine.this.id
+  publisher                  = "Microsoft.Azure.Extensions"
+  type                       = "DockerExtension"
+  type_handler_version       = "1.1"
+  auto_upgrade_minor_version = true
+  tags                       = var.tags
 }

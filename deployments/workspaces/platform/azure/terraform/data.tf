@@ -5,6 +5,7 @@ locals {
   image_publisher = "Canonical"
   image_offer     = "0001-com-ubuntu-server-jammy"
   image_sku       = "22_04-lts-gen2"
+  ssh_enabled     = var.ssh_enabled ? "Allow" : "Deny"
 }
 
 data "azurerm_ssh_public_key" "this" {
@@ -20,7 +21,7 @@ data "azurerm_platform_image" "this" {
 }
 
 data "azurerm_resource_group" "this" {
-  name  = var.resource_group_name
+  name = var.resource_group_name
 }
 
 data "azurerm_virtual_network" "this" {

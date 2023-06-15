@@ -3,7 +3,7 @@ output "public_ip" {
 }
 
 output "website_url" {
-  value = "http://${aws_instance.this.public_dns}:${ http_port }"
+  value = "http://${aws_instance.this.public_dns}:${http_port}"
 }
 
 output "security_group" {
