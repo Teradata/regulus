@@ -1,0 +1,482 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.18.4.5664",
+      "templateHash": "12959106658477179816"
+    }
+  },
+  "parameters": {
+    "workspacesName": {
+      "type": "string",
+      "defaultValue": "workspaces",
+      "metadata": {
+        "description": "Name for the workspaces service virtual machine."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Username for the workspaces service virtual machine."
+      }
+    },
+    "sshPublicKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SSH public key value"
+      }
+    },
+    "dnsLabelPrefix": {
+      "type": "string",
+      "defaultValue": "[toLower(format('{0}-{1}', parameters('workspacesName'), uniqueString(resourceGroup().id)))]",
+      "metadata": {
+        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
+      }
+    },
+    "ubuntuOSVersion": {
+      "type": "string",
+      "defaultValue": "Ubuntu-2004",
+      "allowedValues": [
+        "Ubuntu-1804",
+        "Ubuntu-2004",
+        "Ubuntu-2204"
+      ],
+      "metadata": {
+        "description": "The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v3",
+      "metadata": {
+        "description": "The size of the VM"
+      }
+    },
+    "virtualNetworkName": {
+      "type": "string",
+      "defaultValue": "vNet",
+      "metadata": {
+        "description": "Name of the VNET"
+      }
+    },
+    "subnetName": {
+      "type": "string",
+      "defaultValue": "Subnet",
+      "metadata": {
+        "description": "Name of the subnet in the virtual network"
+      }
+    },
+    "networkSecurityGroupName": {
+      "type": "string",
+      "defaultValue": "SecGroupNet",
+      "metadata": {
+        "description": "Name of the Network Security Group"
+      }
+    },
+    "accessCidrs": {
+      "type": "array",
+      "metadata": {
+        "description": "The CIDR ranges that can be used to communicate with the workspaces instance."
+      }
+    },
+    "httpPort": {
+      "type": "string",
+      "defaultValue": "3000",
+      "metadata": {
+        "description": "port to access the workspaces service UI."
+      }
+    },
+    "grpcPort": {
+      "type": "string",
+      "defaultValue": "3282",
+      "metadata": {
+        "description": "port to access the workspaces service api."
+      }
+    },
+    "sshAccess": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "allow access the workspaces ssh port from the access cidr."
+      }
+    },
+    "customRoleName": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom Role Name."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "#cloud-config\nwrite_files:\n- encoding: b64\n  content: \"{0}\"\n  owner: root:root\n  path: /usr/lib/systemd/system/workspaces.service\n  permissions: '0640'\n\nruncmd:\n- while [ $(systemctl status docker | grep \"active (running)\" | wc -l) -lt 1 ]; do sleep 5; done\n- sleep 60\n- systemctl enable workspaces.service\n- systemctl start workspaces.service",
+    "$fxv#1": "[Unit]\nDescription=workspaces\nAfter=docker.service\nRequires=docker.service\nStartLimitInterval=200\nStartLimitBurst=10\n\n[Service]\nTimeoutStartSec=0\nRestart=always\nRestartSec=2\nExecStartPre=-/usr/bin/mkdir -p /etc/td\nExecStartPre=-/usr/bin/docker exec %n stop || true\nExecStartPre=-/usr/bin/docker rm %n || true\nExecStartPre=/usr/bin/docker pull {0}/{1}:{2}\n\nExecStart=/usr/bin/docker run \\\n    -e accept_license=Y \\\n    -e PLATFORM=azure \\\n    -e ARM_USE_MSI=true \\\n    -e ARM_SUBSCRIPTION_ID={5} \\\n    -e ARM_TENANT_ID={6} \\\n    -v /etc/td:/etc/td \\\n    -p {3}:3000 \\\n    -p {4}:3282 \\\n    --rm --name %n {0}/{1}:{2} workspaces serve -v\n\n[Install]\nWantedBy=multi-user.target",
+    "imageReference": {
+      "Ubuntu-1804": {
+        "publisher": "Canonical",
+        "offer": "UbuntuServer",
+        "sku": "18_04-lts-gen2",
+        "version": "latest"
+      },
+      "Ubuntu-2004": {
+        "publisher": "Canonical",
+        "offer": "0001-com-ubuntu-server-focal",
+        "sku": "20_04-lts-gen2",
+        "version": "latest"
+      },
+      "Ubuntu-2204": {
+        "publisher": "Canonical",
+        "offer": "0001-com-ubuntu-server-jammy",
+        "sku": "22_04-lts-gen2",
+        "version": "latest"
+      }
+    },
+    "publicIPAddressName": "[format('{0}PublicIP', parameters('workspacesName'))]",
+    "networkInterfaceName": "[format('{0}NetInt', parameters('workspacesName'))]",
+    "osDiskType": "Standard_LRS",
+    "subnetAddressPrefix": "10.1.0.0/24",
+    "addressPrefix": "10.1.0.0/16",
+    "linuxConfiguration": {
+      "disablePasswordAuthentication": true,
+      "ssh": {
+        "publicKeys": [
+          {
+            "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+            "keyData": "[parameters('sshPublicKey')]"
+          }
+        ]
+      }
+    },
+    "trustedExtensionName": "GuestAttestation",
+    "trustedExtensionPublisher": "Microsoft.Azure.Security.LinuxAttestation",
+    "trustedExtensionVersion": "1.0",
+    "trustedMaaTenantName": "GuestAttestation",
+    "trustedMaaEndpoint": "[substring('emptystring', 0, 0)]",
+    "dockerExtensionName": "DockerExtension",
+    "dockerExtensionPublisher": "Microsoft.Azure.Extensions",
+    "dockerExtensionVersion": "1.1",
+    "registry": "teradata",
+    "repository": "regulus-workspaces",
+    "version": "latest",
+    "cloudInitData": "[base64(format(variables('$fxv#0'), base64(format(variables('$fxv#1'), variables('registry'), variables('repository'), variables('version'), parameters('httpPort'), parameters('grpcPort'), subscription().subscriptionId, subscription().tenantId))))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('networkInterfaceName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "subnet": {
+                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+              },
+              "privateIPAllocationMethod": "Dynamic",
+              "publicIPAddress": {
+                "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
+              }
+            }
+          }
+        ],
+        "networkSecurityGroup": {
+          "id": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]",
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]",
+        "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "apiVersion": "2021-05-01",
+      "name": "[parameters('networkSecurityGroupName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "securityRules": [
+          {
+            "name": "SSH",
+            "properties": {
+              "priority": 700,
+              "protocol": "Tcp",
+              "access": "[if(parameters('sshAccess'), 'Allow', 'Deny')]",
+              "direction": "Inbound",
+              "sourceAddressPrefixes": "[parameters('accessCidrs')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "22"
+            }
+          },
+          {
+            "name": "HTTP",
+            "properties": {
+              "priority": 701,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefixes": "[parameters('accessCidrs')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "[parameters('httpPort')]"
+            }
+          },
+          {
+            "name": "GRPC",
+            "properties": {
+              "priority": 702,
+              "protocol": "Tcp",
+              "access": "Allow",
+              "direction": "Inbound",
+              "sourceAddressPrefixes": "[parameters('accessCidrs')]",
+              "sourcePortRange": "*",
+              "destinationAddressPrefix": "*",
+              "destinationPortRange": "[parameters('grpcPort')]"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks",
+      "apiVersion": "2021-05-01",
+      "name": "[parameters('virtualNetworkName')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[variables('addressPrefix')]"
+          ]
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Network/virtualNetworks/subnets",
+      "apiVersion": "2021-05-01",
+      "name": "[format('{0}/{1}', parameters('virtualNetworkName'), parameters('subnetName'))]",
+      "properties": {
+        "addressPrefix": "[variables('subnetAddressPrefix')]",
+        "privateEndpointNetworkPolicies": "Enabled",
+        "privateLinkServiceNetworkPolicies": "Enabled"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Network/publicIPAddresses",
+      "apiVersion": "2021-05-01",
+      "name": "[variables('publicIPAddressName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Basic"
+      },
+      "properties": {
+        "publicIPAllocationMethod": "Dynamic",
+        "publicIPAddressVersion": "IPv4",
+        "dnsSettings": {
+          "domainNameLabel": "[parameters('dnsLabelPrefix')]"
+        },
+        "idleTimeoutInMinutes": 4
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2023-03-01",
+      "name": "[parameters('workspacesName')]",
+      "location": "[parameters('location')]",
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "storageProfile": {
+          "osDisk": {
+            "createOption": "FromImage",
+            "managedDisk": {
+              "storageAccountType": "[variables('osDiskType')]"
+            }
+          },
+          "imageReference": "[variables('imageReference')[parameters('ubuntuOSVersion')]]"
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+            }
+          ]
+        },
+        "osProfile": {
+          "computerName": "[parameters('workspacesName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "linuxConfiguration": "[variables('linuxConfiguration')]"
+        },
+        "securityProfile": {
+          "encryptionAtHost": true,
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        },
+        "userData": "[variables('cloudInitData')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2022-03-01",
+      "name": "[format('{0}/{1}', parameters('workspacesName'), variables('trustedExtensionName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publisher": "[variables('trustedExtensionPublisher')]",
+        "type": "[variables('trustedExtensionName')]",
+        "typeHandlerVersion": "[variables('trustedExtensionVersion')]",
+        "autoUpgradeMinorVersion": true,
+        "settings": {
+          "AttestationConfig": {
+            "MaaSettings": {
+              "maaEndpoint": "[variables('trustedMaaEndpoint')]",
+              "maaTenantName": "[variables('trustedMaaTenantName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines/extensions",
+      "apiVersion": "2023-03-01",
+      "name": "[format('{0}/{1}', parameters('workspacesName'), variables('dockerExtensionName'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "publisher": "[variables('dockerExtensionPublisher')]",
+        "type": "[variables('dockerExtensionName')]",
+        "typeHandlerVersion": "[variables('dockerExtensionVersion')]",
+        "autoUpgradeMinorVersion": true
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+      ]
+    },
+    {
+      "condition": "[not(equals(parameters('customRoleName'), ''))]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), resourceId('Microsoft.Authorization/roleDefinitions', parameters('customRoleName')))]",
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('customRoleName'))]",
+        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), '2023-03-01', 'full').identity.principalId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('customRoleName'), '')]",
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(subscription().id, resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName'))))]",
+      "properties": {
+        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName')))]",
+        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), '2023-03-01', 'full').identity.principalId]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName')))]",
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+      ]
+    },
+    {
+      "condition": "[equals(parameters('customRoleName'), '')]",
+      "type": "Microsoft.Authorization/roleDefinitions",
+      "apiVersion": "2022-04-01",
+      "name": "[format('{0}-custom-role', parameters('workspacesName'))]",
+      "properties": {
+        "roleName": "[format('Custom Role - Workspaces {0} Regulus Deployment Permissions', parameters('workspacesName'))]",
+        "description": "[format('Subscription level permissions for workspaces {0} to create regulus deployments', parameters('workspacesName'))]",
+        "type": "customRole",
+        "permissions": [
+          {
+            "actions": [
+              "Microsoft.Compute/disks/read",
+              "Microsoft.Compute/disks/write",
+              "Microsoft.Compute/disks/delete",
+              "Microsoft.Compute/sshPublicKeys/read",
+              "Microsoft.Compute/sshPublicKeys/write",
+              "Microsoft.Compute/sshPublicKeys/delete",
+              "Microsoft.Compute/virtualMachines/read",
+              "Microsoft.Compute/virtualMachines/write",
+              "Microsoft.Compute/virtualMachines/delete",
+              "Microsoft.KeyVault/vaults/read",
+              "Microsoft.KeyVault/vaults/write",
+              "Microsoft.KeyVault/vaults/delete",
+              "Microsoft.KeyVault/vaults/accessPolicies/write",
+              "Microsoft.KeyVault/locations/operationResults/read",
+              "Microsoft.KeyVault/locations/deletedVaults/purge/action",
+              "Microsoft.Network/virtualNetworks/read",
+              "Microsoft.Network/virtualNetworks/write",
+              "Microsoft.Network/virtualNetworks/delete",
+              "Microsoft.Network/virtualNetworks/subnets/read",
+              "Microsoft.Network/virtualNetworks/subnets/write",
+              "Microsoft.Network/virtualNetworks/subnets/delete",
+              "Microsoft.Network/virtualNetworks/subnets/join/action",
+              "Microsoft.Network/networkInterfaces/read",
+              "Microsoft.Network/networkInterfaces/write",
+              "Microsoft.Network/networkInterfaces/delete",
+              "Microsoft.Network/networkInterfaces/join/action",
+              "Microsoft.Network/networkSecurityGroups/read",
+              "Microsoft.Network/networkSecurityGroups/write",
+              "Microsoft.Network/networkSecurityGroups/delete",
+              "Microsoft.Network/networkSecurityGroups/securityRules/read",
+              "Microsoft.Network/networkSecurityGroups/securityRules/write",
+              "Microsoft.Network/networkSecurityGroups/securityRules/delete",
+              "Microsoft.Network/networkSecurityGroups/join/action",
+              "Microsoft.Network/publicIPAddresses/read",
+              "Microsoft.Network/publicIPAddresses/write",
+              "Microsoft.Network/publicIPAddresses/join/action",
+              "Microsoft.Network/publicIPAddresses/delete",
+              "Microsoft.Resources/subscriptions/resourcegroups/read",
+              "Microsoft.Resources/subscriptions/resourcegroups/write",
+              "Microsoft.Resources/subscriptions/resourcegroups/delete"
+            ]
+          }
+        ],
+        "assignableScopes": [
+          "[subscription().id]"
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "adminUsername": {
+      "type": "string",
+      "value": "[parameters('adminUsername')]"
+    },
+    "hostname": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn]"
+    },
+    "sshCommand": {
+      "type": "string",
+      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn)]"
+    }
+  }
+}

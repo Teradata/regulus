@@ -1,0 +1,319 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  License: TODO
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "Workspaces"
+        Parameters:
+          - WorkspacesName
+          - InstanceType
+      - Label:
+          default: "Workspaces connection"
+        Parameters:
+          - Subnet
+          - KeyName
+          - AccessCIDR
+
+Description: >-
+  AWS CloudFormation Template Workspaces: Workspaces is a instance based service for deploying
+  and spending regulus clusters, and managing project lifecycles.You will be billed for the AWS
+  resources used if you create a stack from this template.
+
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  WorkspacesName:
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+    Default: workspaces
+    Description: The workspaces service instance name
+    MaxLength: '32'
+    MinLength: '1'
+    Type: String
+
+  Subnet:
+    ConstraintDescription: must be the name of an existing subnet.
+    Description: Subnetwork to deploy the workspaces service to.
+    Type: AWS::EC2::Subnet::Id
+
+  HttpPort:
+    ConstraintDescription: must be a valid ununsed port between 0 and 65535.
+    Description: port to access the workspaces service ui.
+    Type: Number
+    Default: 3000
+    MinValue: 0
+    MaxValue: 65535
+
+  GrpcPort:
+    ConstraintDescription: must be a valid ununsed port between 0 and 65535.
+    Description: port to access the workspaces service api.
+    Type: Number
+    Default: 3282
+    MinValue: 0
+    MaxValue: 65535
+
+  Version:
+    Type: String
+    Default: latest
+    Description: Which version of workspaces to deploy, uses container version tags, defaults to "latest"
+
+  InstanceType:
+    AllowedValues:
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - m3.medium
+    - m3.large
+    - m3.xlarge
+    - m3.2xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - c3.large
+    - c3.xlarge
+    - c3.2xlarge
+    - c3.4xlarge
+    - c3.8xlarge
+    - c4.large
+    - c4.xlarge
+    - c4.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
+    - r3.large
+    - r3.xlarge
+    - r3.2xlarge
+    - r3.4xlarge
+    - r3.8xlarge
+    - i2.xlarge
+    - i2.2xlarge
+    - i2.4xlarge
+    - i2.8xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: t2.micro
+    Description: Workspaces EC2 instance type
+    Type: String
+
+  KeyName:
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+
+  AccessCIDR:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Default: 0.0.0.0/0
+    Description: The IP address range that can be used to communicate with the workspaces instance.
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+
+Resources:
+
+  WorkspacesServer:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          workspaces_install:
+          - install_docker
+          - configure_workspaces_service
+          - start_workspaces_service
+        install_docker:
+          commands:
+            install_docker:
+              command: !Sub |
+                #!/bin/bash -xe
+                amazon-linux-extras install docker -y
+                amazon-linux-extras enable docker
+          services:
+            systemd:
+              docker:
+                enabled: "true"
+                ensureRunning: "true"
+        configure_workspaces_service:
+          files:
+            /usr/lib/systemd/system/workspaces.service:
+              content: !Sub |
+                [Unit]
+                Description=workspaces
+                After=docker.service
+                Requires=docker.service
+                StartLimitInterval=200
+                StartLimitBurst=10
+
+                [Service]
+                TimeoutStartSec=0
+                Restart=always
+                RestartSec=2
+                ExecStartPre=-/usr/bin/mkdir -p /etc/td
+                ExecStartPre=-/usr/bin/docker exec %n stop || true
+                ExecStartPre=-/usr/bin/docker rm %n || true
+                ExecStartPre=/usr/bin/docker pull teradata/regulus-workspaces:${ Version }
+                ExecStart=/usr/bin/docker run \
+                    -e accept_license=Y \
+                    -e PLATFORM=aws \
+                    -v /etc/td:/etc/td \
+                    -p ${ HttpPort }:3000 \
+                    -p ${ GrpcPort }:3282 \
+                    --rm --name %n teradata/regulus-workspaces:${ Version } workspaces serve -v
+
+                [Install]
+                WantedBy=multi-user.target
+              group: root
+              mode: '000400'
+              owner: root
+        start_workspaces_service:
+          services:
+            systemd:
+              workspaces:
+                enabled: "true"
+                ensureRunning: "true"
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            Encrypted: true
+      SubnetId: !Ref Subnet
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      DisableApiTermination: true
+      SecurityGroupIds: [!GetAtt WorkspacesSecurityGroup.GroupId] 
+      IamInstanceProfile: !Ref WorkspacesInstanceProfile
+      UserData:
+        Fn::Base64: !Sub |
+           #!/bin/bash -xe
+           yum update -y
+           yum update -y aws-cfn-bootstrap
+           /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource WorkspacesServer --configsets workspaces_install --region ${AWS::Region}
+           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource WorkspacesServer --region ${AWS::Region}
+
+  WorkspacesSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Enable access to workspaces server over http, grpc, and ssh"
+      SecurityGroupIngress:
+      - CidrIp: !Ref AccessCIDR
+        FromPort: !Ref HttpPort
+        IpProtocol: tcp
+        ToPort: !Ref HttpPort
+      - CidrIp: !Ref AccessCIDR
+        FromPort: !Ref GrpcPort
+        IpProtocol: tcp
+        ToPort: !Ref GrpcPort
+      - CidrIp: !Ref AccessCIDR
+        FromPort: 22
+        IpProtocol: tcp
+        ToPort: 22
+
+  WorkspacesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - ec2.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      Path: "/"
+  WorkspacesRolePolicies:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WorkspacesPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: 
+          - "iam:PassRole"
+          - "iam:AddRoleToInstanceProfile"
+          - "iam:CreateInstanceProfile"
+          - "iam:CreateRole"
+          - "iam:DeleteInstanceProfile"
+          - "iam:DeleteRole"
+          - "iam:DeleteRolePolicy"
+          - "iam:GetInstanceProfile"
+          - "iam:GetRole"
+          - "iam:GetRolePolicy"
+          - "iam:ListAttachedRolePolicies"
+          - "iam:ListInstanceProfilesForRole"
+          - "iam:ListRolePolicies"
+          - "iam:PutRolePolicy"
+          - "iam:RemoveRoleFromInstanceProfile"
+          - "ec2:TerminateInstances"
+          - "ec2:RunInstances"
+          - "ec2:RevokeSecurityGroupEgress"
+          - "ec2:ModifyInstanceAttribute"
+          - "ec2:ImportKeyPair"
+          - "ec2:DescribeVpcs"
+          - "ec2:DescribeVolumes"
+          - "ec2:DescribeTags"
+          - "ec2:DescribeSubnets"
+          - "ec2:DescribeSecurityGroups"
+          - "ec2:DescribePlacementGroups"
+          - "ec2:DescribeNetworkInterfaces"
+          - "ec2:DescribeLaunchTemplates"
+          - "ec2:DescribeLaunchTemplateVersions"
+          - "ec2:DescribeKeyPairs"
+          - "ec2:DescribeInstanceTypes"
+          - "ec2:DescribeInstanceTypeOfferings"
+          - "ec2:DescribeInstances"
+          - "ec2:DescribeInstanceAttribute"
+          - "ec2:DescribeImages"
+          - "ec2:DescribeAccountAttributes"
+          - "ec2:DeleteSecurityGroup"
+          - "ec2:DeletePlacementGroup"
+          - "ec2:DeleteLaunchTemplate"
+          - "ec2:DeleteKeyPair"
+          - "ec2:CreateTags"
+          - "ec2:CreateSecurityGroup"
+          - "ec2:CreatePlacementGroup"
+          - "ec2:CreateLaunchTemplateVersion"
+          - "ec2:CreateLaunchTemplate"
+          - "ec2:AuthorizeSecurityGroupIngress"
+          - "ec2:AuthorizeSecurityGroupEgress"
+          - "secretsmanager:CreateSecret"
+          - "secretsmanager:DeleteSecret"
+          - "secretsmanager:DescribeSecret"
+          - "secretsmanager:GetResourcePolicy"
+          - "secretsmanager:GetSecretValue"
+          - "secretsmanager:PutSecretValue"
+          Resource: "*"
+      Roles:
+      - !Ref WorkspacesRole
+  WorkspacesInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref WorkspacesRole
+
+Outputs:
+  PublicIP:
+    Description: EC2 public IP
+    Value: !GetAtt WorkspacesServer.PublicIp
+  WebsiteURL:
+    Description: Teradata Workspaces Server
+    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }"
+  SecurityGroup:
+    Description: Workspaces Security Group
+    Value: !GetAtt WorkspacesSecurityGroup.GroupId
