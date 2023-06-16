@@ -11,6 +11,16 @@ variable "instance_type" {
   default = "t3.large"
 }
 
+variable "volume_size" {
+  type    = number
+  default = 20
+}
+
+variable "termination_protection" {
+  type    = bool
+  default = false
+}
+
 variable "key_name" {
   description = "name of existing ssh key to enable access to workspaces server"
   type        = string
@@ -34,7 +44,7 @@ variable "workspaces_registry" {
 
 variable "workspaces_repository" {
   type    = string
-  default = "workspaces"
+  default = "regulus-workspaces"
 }
 
 variable "workspaces_version" {
@@ -53,7 +63,8 @@ variable "egress_cidr" {
 }
 
 variable "monitoring_enabled" {
-  bool = false
+  type = bool 
+  default = false
 }
 
 variable "http_port" {
