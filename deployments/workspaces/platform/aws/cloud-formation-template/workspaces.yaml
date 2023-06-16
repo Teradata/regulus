@@ -9,6 +9,7 @@ Metadata:
           - WorkspacesName
           - InstanceType
           - VolumeSize
+          - TerminationProtection
       - Label:
           default: "Workspaces connection"
         Parameters:
@@ -66,9 +67,17 @@ Parameters:
     ConstraintDescription: Size in GB, between 10 and 1000.
     Description: port to access the workspaces service api.
     Type: Number
-    Default: 10
-    MinValue: 10
+    Default: 20
+    MinValue: 8
     MaxValue: 1000
+
+  TerminationProtection:
+    Description: Enable instance termination protection.
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: false
 
   InstanceType:
     AllowedValues:
@@ -195,7 +204,7 @@ Resources:
                 ensureRunning: "true"
     Properties:
       BlockDeviceMappings:
-        - DeviceName: /dev/sda1
+        - DeviceName: /dev/xvda
           Ebs:
             VolumeSize: !Ref VolumeSize
             Encrypted: true
@@ -203,7 +212,7 @@ Resources:
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName: !Ref KeyName
-      DisableApiTermination: true
+      DisableApiTermination: !Ref TerminationProtection
       SecurityGroupIds: [!GetAtt WorkspacesSecurityGroup.GroupId] 
       IamInstanceProfile: !Ref WorkspacesInstanceProfile
       UserData:
