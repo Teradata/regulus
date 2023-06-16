@@ -8,6 +8,7 @@ Metadata:
         Parameters:
           - WorkspacesName
           - InstanceType
+          - VolumeSize
       - Label:
           default: "Workspaces connection"
         Parameters:
@@ -60,6 +61,14 @@ Parameters:
     Type: String
     Default: latest
     Description: Which version of workspaces to deploy, uses container version tags, defaults to "latest"
+
+  VolumeSize:
+    ConstraintDescription: Size in GB, between 10 and 1000.
+    Description: port to access the workspaces service api.
+    Type: Number
+    Default: 10
+    MinValue: 10
+    MaxValue: 1000
 
   InstanceType:
     AllowedValues:
@@ -188,6 +197,7 @@ Resources:
       BlockDeviceMappings:
         - DeviceName: /dev/sda1
           Ebs:
+            VolumeSize: !Ref VolumeSize
             Encrypted: true
       SubnetId: !Ref Subnet
       ImageId: !Ref LatestAmiId
