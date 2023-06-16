@@ -13,21 +13,21 @@ resource "aws_security_group" "this" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = var.ingress_cidr
+    cidr_blocks = var.access_cidrs
   }
 
   ingress {
     from_port   = 3000
     to_port     = 3000
     protocol    = "tcp"
-    cidr_blocks = var.ingress_cidr
+    cidr_blocks = var.access_cidrs
   }
 
   ingress {
     from_port   = 3282
     to_port     = 3282
     protocol    = "tcp"
-    cidr_blocks = var.ingress_cidr
+    cidr_blocks = var.access_cidrs
   }
 
   tags = {

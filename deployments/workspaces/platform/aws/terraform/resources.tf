@@ -48,19 +48,15 @@ resource "aws_instance" "this" {
 
   root_block_device {
     delete_on_termination = true
-    volume_size           = 20
+    volume_size           = var.volume_size
     volume_type           = "gp2"
     encrypted             = true
-  }
-
-  metadata_options {
-    http_tokens = "required"
   }
 
   tags = {
   Name = join("-", [var.workspaces_name, "workspaces"]) }
 
-  disable_api_termination = true
+  disable_api_termination = var.termination_protection
 
   lifecycle {
     ignore_changes = [
