@@ -1,5 +1,5 @@
 resource "aws_launch_template" "this" {
-  name_prefix   = var.workspaces_name
+  name_prefix   = var.jupyter_name
   image_id      = data.aws_ami.this.id
   instance_type = var.instance_type
 
@@ -16,14 +16,14 @@ resource "aws_launch_template" "this" {
   }
 
   tags = merge({
-    Name = var.workspaces_name
+    Name = var.jupyter_name
     },
     var.tags
   )
 
   tag_specifications {
     resource_type = "volume"
-    tags          = merge({ Name = join("-", [var.workspaces_name, "workspaces-volume"]) }, var.tags)
+    tags          = merge({ Name = join("-", [var.jupyter_name, "jupyter-volume"]) }, var.tags)
   }
 
   metadata_options {
@@ -32,9 +32,6 @@ resource "aws_launch_template" "this" {
     http_tokens            = "required"
   }
 
-  iam_instance_profile {
-    arn = aws_iam_instance_profile.this.arn
-  }
 }
 
 resource "aws_instance" "this" {
@@ -49,15 +46,15 @@ resource "aws_instance" "this" {
 
   root_block_device {
     delete_on_termination = true
-    volume_size           = var.volume_size
+    volume_size           = 20
     volume_type           = "gp2"
     encrypted             = true
   }
 
   tags = {
-  Name = join("-", [var.workspaces_name, "workspaces"]) }
+  Name = join("-", [var.jupyter_name, "jupyter"]) }
 
-  disable_api_termination = var.termination_protection
+  disable_api_termination = true
 
   lifecycle {
     ignore_changes = [
@@ -68,3 +65,5 @@ resource "aws_instance" "this" {
     ]
   }
 }
+
+resource "random_uuid" "jupyter_token" {}

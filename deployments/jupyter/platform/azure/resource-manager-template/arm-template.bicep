@@ -1,15 +1,19 @@
-@description('Name for the workspaces service virtual machine.')
-param workspacesName string = 'workspaces'
+@description('Name for the jupyter service virtual machine.')
+param jupyterName string = 'jupyter'
 
-@description('Username for the workspaces service virtual machine.')
+@description('Username for the jupyter service virtual machine.')
 param adminUsername string
 
 @description('SSH public key value')
 @secure()
 param sshPublicKey string
 
+@description('jupyter token value')
+@secure()
+param jupyterToken string
+
 @description('Unique DNS Name for the Public IP used to access the Virtual Machine.')
-param dnsLabelPrefix string = toLower('${workspacesName}-${uniqueString(resourceGroup().id)}')
+param dnsLabelPrefix string = toLower('${jupyterName}-${uniqueString(resourceGroup().id)}')
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
 @allowed([
@@ -34,16 +38,13 @@ param subnetName string = 'Subnet'
 @description('Name of the Network Security Group')
 param networkSecurityGroupName string = 'SecGroupNet'
 
-@description('The CIDR ranges that can be used to communicate with the workspaces instance.')
+@description('The CIDR ranges that can be used to communicate with the jupyter instance.')
 param accessCidrs array
 
-@description('port to access the workspaces service UI.')
-param httpPort string = '3000'
+@description('port to access the jupyter service UI.')
+param httpPort string = '8888'
 
-@description('port to access the workspaces service api.')
-param grpcPort string = '3282'
-
-@description('allow access the workspaces ssh port from the access cidr.')
+@description('allow access the jupyter ssh port from the access cidr.')
 param sshAccess bool = false
 
 var imageReference = {
@@ -66,8 +67,8 @@ var imageReference = {
     version: 'latest'
   }
 }
-var publicIPAddressName = '${workspacesName}PublicIP'
-var networkInterfaceName = '${workspacesName}NetInt'
+var publicIPAddressName = '${jupyterName}PublicIP'
+var networkInterfaceName = '${jupyterName}NetInt'
 var osDiskType = 'Standard_LRS'
 var subnetAddressPrefix = '10.1.0.0/24'
 var addressPrefix = '10.1.0.0/16'
@@ -93,21 +94,19 @@ var dockerExtensionPublisher = 'Microsoft.Azure.Extensions'
 var dockerExtensionVersion = '1.1'
 
 var registry = 'teradata'
-var repository = 'regulus-workspaces'
+var repository = 'regulus-jupyter'
 var version = 'latest'
 var cloudInitData = base64(
   format(
     loadTextContent('templates/cloudinit.yaml'), 
     base64(
       format(
-        loadTextContent('templates/workspaces.service'),
+        loadTextContent('templates/jupyter.service'),
         registry,
         repository,
         version,
         httpPort,
-        grpcPort,
-        subscription().subscriptionId,
-        subscription().tenantId 
+        jupyterToken
       )
     )
   )
@@ -168,19 +167,6 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-0
           destinationPortRange: httpPort
         }
       }
-      {
-        name: 'GRPC'
-        properties: {
-          priority: 702
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefixes: accessCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: grpcPort
-        }
-      }
     ]
   }
 }
@@ -224,7 +210,7 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
 }
 
 resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
-  name: workspacesName
+  name: jupyterName
   location: location
   identity: {
     type: 'SystemAssigned'
@@ -251,7 +237,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
     }
     
     osProfile: {
-      computerName: workspacesName
+      computerName: jupyterName
       adminUsername: adminUsername
       linuxConfiguration: linuxConfiguration
     }
@@ -269,7 +255,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
 
 
 
-resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
+resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
   parent: vm
   name: trustedExtensionName
   location: location
@@ -289,7 +275,7 @@ resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/ext
   }
 }
 
-resource workspacesName_extension_docker 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
+resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: dockerExtensionName
   location: location
@@ -301,93 +287,10 @@ resource workspacesName_extension_docker 'Microsoft.Compute/virtualMachines/exte
   }
 }
 
-resource existingRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName != '') {
-  name: guid(subscription().id, vm.id, existingRoleDef.id)
-  properties: {
-    roleDefinitionId: existingRoleDef.id
-    principalId: vm.identity.principalId
-  }
-}
-
-resource newRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName == '') {
-  name: guid(subscription().id, vm.id, newRoleDef.id)
-  properties: {
-    roleDefinitionId: newRoleDef.id
-    principalId: vm.identity.principalId
-  }
-}
-
-@description('Custom Role Name.')
-param customRoleName string = ''
-
-resource existingRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = if (customRoleName != '') {
-  name: customRoleName
-}
-
-resource newRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (customRoleName == '') {
-  name:  '${workspacesName}-custom-role'
-  properties: {
-    roleName: 'Custom Role - Workspaces ${workspacesName} Regulus Deployment Permissions'
-    description: 'Subscription level permissions for workspaces ${workspacesName} to create regulus deployments'
-    type: 'customRole'
-    permissions: [
-      {
-        actions: [
-          'Microsoft.Compute/disks/read'
-          'Microsoft.Compute/disks/write'
-          'Microsoft.Compute/disks/delete'
-          'Microsoft.Compute/sshPublicKeys/read'
-          'Microsoft.Compute/sshPublicKeys/write'
-          'Microsoft.Compute/sshPublicKeys/delete'
-          'Microsoft.Compute/virtualMachines/read'
-          'Microsoft.Compute/virtualMachines/write'
-          'Microsoft.Compute/virtualMachines/delete'
-          'Microsoft.KeyVault/vaults/read'
-          'Microsoft.KeyVault/vaults/write'
-          'Microsoft.KeyVault/vaults/delete'
-          'Microsoft.KeyVault/vaults/accessPolicies/write'
-          'Microsoft.KeyVault/locations/operationResults/read'
-          'Microsoft.KeyVault/locations/deletedVaults/purge/action'
-          'Microsoft.Network/virtualNetworks/read'
-          'Microsoft.Network/virtualNetworks/write'
-          'Microsoft.Network/virtualNetworks/delete'
-          'Microsoft.Network/virtualNetworks/subnets/read'
-          'Microsoft.Network/virtualNetworks/subnets/write'
-          'Microsoft.Network/virtualNetworks/subnets/delete'
-          'Microsoft.Network/virtualNetworks/subnets/join/action'
-          'Microsoft.Network/networkInterfaces/read'
-          'Microsoft.Network/networkInterfaces/write'
-          'Microsoft.Network/networkInterfaces/delete'
-          'Microsoft.Network/networkInterfaces/join/action'
-          'Microsoft.Network/networkSecurityGroups/read'
-          'Microsoft.Network/networkSecurityGroups/write'
-          'Microsoft.Network/networkSecurityGroups/delete'
-          'Microsoft.Network/networkSecurityGroups/securityRules/read'
-          'Microsoft.Network/networkSecurityGroups/securityRules/write'
-          'Microsoft.Network/networkSecurityGroups/securityRules/delete'
-          'Microsoft.Network/networkSecurityGroups/join/action'
-          'Microsoft.Network/publicIPAddresses/read'
-          'Microsoft.Network/publicIPAddresses/write'
-          'Microsoft.Network/publicIPAddresses/join/action'
-          'Microsoft.Network/publicIPAddresses/delete'
-          'Microsoft.Resources/subscriptions/resourcegroups/read'
-          'Microsoft.Resources/subscriptions/resourcegroups/write'
-          'Microsoft.Resources/subscriptions/resourcegroups/delete'
-        ]
-      }
-    ]
-    assignableScopes: [
-      subscription().id
-    ]
-  }
-}
-
 output AdminUsername string = adminUsername
 output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
 output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
-output PublicGrpcAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ grpcPort }'
-output PrivateGrpcAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ grpcPort }'
 output SecurityGroup string = networkSecurityGroup.id
 output sshCommand string = 'ssh ${adminUsername}@${publicIPAddress.properties.dnsSettings.fqdn}'

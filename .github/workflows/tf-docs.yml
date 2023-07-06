@@ -1,0 +1,29 @@
+name: Generate terraform docs
+on:
+  - pull_request
+
+jobs:
+  docs:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - aws
+          - azure
+        application:
+          - workspaces
+          - jupyter
+
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.ref }}
+
+    - name: Render terraform docs and push changes back to PR
+      uses: terraform-docs/gh-actions@main
+      with:
+        working-dir: ./deployments/${{ matrix.application }}/platform/${{ matrix.platform }}/terraform
+        output-file: README.md
+        output-method: inject
+        git-push: "true"

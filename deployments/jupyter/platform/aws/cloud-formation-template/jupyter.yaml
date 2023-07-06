@@ -1,0 +1,252 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Metadata:
+  License: TODO
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "jupyter"
+        Parameters:
+          - jupyterName
+          - InstanceType
+          - VolumeSize
+          - TerminationProtection
+          - JupyterToken
+      - Label:
+          default: "jupyter connection"
+        Parameters:
+          - Subnet
+          - KeyName
+          - AccessCIDR
+
+Description: >-
+  AWS CloudFormation Template jupyter: a jupyter instance configured with the regulus kernel.
+
+Parameters:
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  jupyterName:
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric
+      characters.
+    Default: jupyter
+    Description: The jupyter service instance name
+    MaxLength: '32'
+    MinLength: '1'
+    Type: String
+
+  Subnet:
+    ConstraintDescription: must be the name of an existing subnet.
+    Description: Subnetwork to deploy the jupyter service to.
+    Type: AWS::EC2::Subnet::Id
+
+  HttpPort:
+    ConstraintDescription: must be a valid ununsed port between 0 and 65535.
+    Description: port to access the jupyter service ui.
+    Type: Number
+    Default: 8888
+    MinValue: 0
+    MaxValue: 65535
+
+  Version:
+    Type: String
+    Default: latest
+    Description: Which version of jupyter to deploy, uses container version tags, defaults to "latest"
+
+  JupyterToken:
+    Type: String
+    NoEcho: true
+    Description: The token or password equivalent used to access Jupyter.
+
+  VolumeSize:
+    ConstraintDescription: Size in GB, between 10 and 1000.
+    Description: port to access the jupyter service api.
+    Type: Number
+    Default: 20
+    MinValue: 8
+    MaxValue: 1000
+
+  TerminationProtection:
+    Description: Enable instance termination protection.
+    Type: String
+    AllowedValues:
+      - true
+      - false
+    Default: false
+
+  InstanceType:
+    AllowedValues:
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t2.medium
+    - t2.large
+    - t3.nano
+    - t3.micro
+    - t3.small
+    - t3.medium
+    - t3.large
+    - m3.medium
+    - m3.large
+    - m3.xlarge
+    - m3.2xlarge
+    - m4.large
+    - m4.xlarge
+    - m4.2xlarge
+    - m4.4xlarge
+    - m4.10xlarge
+    - c3.large
+    - c3.xlarge
+    - c3.2xlarge
+    - c3.4xlarge
+    - c3.8xlarge
+    - c4.large
+    - c4.xlarge
+    - c4.2xlarge
+    - c4.4xlarge
+    - c4.8xlarge
+    - r3.large
+    - r3.xlarge
+    - r3.2xlarge
+    - r3.4xlarge
+    - r3.8xlarge
+    - i2.xlarge
+    - i2.2xlarge
+    - i2.4xlarge
+    - i2.8xlarge
+    ConstraintDescription: must be a valid EC2 instance type.
+    Default: t2.micro
+    Description: jupyter EC2 instance type
+    Type: String
+
+  KeyName:
+    ConstraintDescription: must be the name of an existing EC2 KeyPair.
+    Description: Name of an existing EC2 KeyPair to enable SSH access to the instances
+    Type: AWS::EC2::KeyPair::KeyName
+
+  AccessCIDR:
+    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})
+    ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
+    Default: 0.0.0.0/0
+    Description: The IP address range that can be used to communicate with the jupyter instance.
+    MaxLength: '18'
+    MinLength: '9'
+    Type: String
+
+Resources:
+
+  jupyterServer:
+    Type: AWS::EC2::Instance
+    CreationPolicy:
+      ResourceSignal:
+        Timeout: PT15M
+    Metadata:
+      AWS::CloudFormation::Init:
+        configSets:
+          jupyter_install:
+          - install_docker
+          - configure_jupyter_service
+          - start_jupyter_service
+        install_docker:
+          commands:
+            install_docker:
+              command: !Sub |
+                #!/bin/bash -xe
+                amazon-linux-extras install docker -y
+                amazon-linux-extras enable docker
+          services:
+            systemd:
+              docker:
+                enabled: "true"
+                ensureRunning: "true"
+        configure_jupyter_service:
+          files:
+            /usr/lib/systemd/system/jupyter.service:
+              content: !Sub |
+                [Unit]
+                Description=jupyter
+                After=docker.service
+                Requires=docker.service
+                StartLimitInterval=200
+                StartLimitBurst=10
+
+                [Service]
+                TimeoutStartSec=0
+                Restart=always
+                RestartSec=2
+                ExecStartPre=-/usr/bin/mkdir -p /etc/td
+                ExecStartPre=-/usr/bin/docker exec %n stop || true
+                ExecStartPre=-/usr/bin/docker rm %n || true
+                ExecStartPre=/usr/bin/docker pull teradata/regulus-jupyter:${ Version }
+                ExecStart=/usr/bin/docker run \
+                    -e accept_license=Y \
+                    -e JUPYTER_TOKEN=${ JupyterToken } \
+                    -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \
+                    -p ${ HttpPort }:8888 \
+                    --rm --name %n teradata/regulus-jupyter:${ Version }
+
+                [Install]
+                WantedBy=multi-user.target
+              group: root
+              mode: '000400'
+              owner: root
+        start_jupyter_service:
+          services:
+            systemd:
+              jupyter:
+                enabled: "true"
+                ensureRunning: "true"
+    Properties:
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: !Ref VolumeSize
+            Encrypted: true
+      SubnetId: !Ref Subnet
+      ImageId: !Ref LatestAmiId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      DisableApiTermination: !Ref TerminationProtection
+      SecurityGroupIds: [!GetAtt jupyterSecurityGroup.GroupId] 
+      UserData:
+        Fn::Base64: !Sub |
+           #!/bin/bash -xe
+           yum update -y
+           yum update -y aws-cfn-bootstrap
+           /opt/aws/bin/cfn-init -v --stack ${AWS::StackId} --resource jupyterServer --configsets jupyter_install --region ${AWS::Region}
+           /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource jupyterServer --region ${AWS::Region}
+
+  jupyterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Enable access to jupyter server over http, grpc, and ssh"
+      SecurityGroupIngress:
+      - CidrIp: !Ref AccessCIDR
+        FromPort: !Ref HttpPort
+        IpProtocol: tcp
+        ToPort: !Ref HttpPort
+      - CidrIp: !Ref AccessCIDR
+        FromPort: 22
+        IpProtocol: tcp
+        ToPort: 22
+
+Outputs:
+  PublicIP:
+    Description: EC2 public IP
+    Value: !GetAtt jupyterServer.PublicIp
+  PrivateIP:
+    Description: EC2 private IP
+    Value: !GetAtt jupyterServer.PrivateIp
+  PublicHttpAccess:
+    Description: Teradata jupyter Server
+    Value: !Sub "http://${jupyterServer.PublicDnsName}:${ HttpPort }?token=${ JupyterToken }"
+  PrivateHttpAccess:
+    Description: Teradata jupyter Server
+    Value: !Sub "http://${jupyterServer.PrivateDnsName}:${ HttpPort }?token=${ JupyterToken }"
+  SecurityGroup:
+    Description: jupyter Security Group
+    Value: !GetAtt jupyterSecurityGroup.GroupId
+  SSHConeection:
+    Description: jupyter ssh connnection string
+    Value: !Sub "ssh ec2-user@${ jupyterServer.PublicIp }"

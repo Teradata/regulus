@@ -330,9 +330,18 @@ Outputs:
   PublicIP:
     Description: EC2 public IP
     Value: !GetAtt WorkspacesServer.PublicIp
-  WebsiteURL:
+  PrivateIP:
+    Description: EC2 private IP
+    Value: !GetAtt WorkspacesServer.PrivateIp
+  PublicHttpAccess:
     Description: Teradata Workspaces Server
     Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }"
+  PrivateHttpAccess:
+    Description: Teradata Workspaces Server
+    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }"
   SecurityGroup:
     Description: Workspaces Security Group
     Value: !GetAtt WorkspacesSecurityGroup.GroupId
+  SSHConeection:
+    Description: Workspaces ssh connnection string
+    Value: !Sub "ssh ec2-user@${ WorkspacesServer.PublicIp }"

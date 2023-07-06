@@ -5,21 +5,21 @@
     "_generator": {
       "name": "bicep",
       "version": "0.18.4.5664",
-      "templateHash": "12911493323856216175"
+      "templateHash": "3802902211667631024"
     }
   },
   "parameters": {
-    "workspacesName": {
+    "jupyterName": {
       "type": "string",
-      "defaultValue": "workspaces",
+      "defaultValue": "jupyter",
       "metadata": {
-        "description": "Name for the workspaces service virtual machine."
+        "description": "Name for the jupyter service virtual machine."
       }
     },
     "adminUsername": {
       "type": "string",
       "metadata": {
-        "description": "Username for the workspaces service virtual machine."
+        "description": "Username for the jupyter service virtual machine."
       }
     },
     "sshPublicKey": {
@@ -28,9 +28,15 @@
         "description": "SSH public key value"
       }
     },
+    "jupyterToken": {
+      "type": "securestring",
+      "metadata": {
+        "description": "jupyter token value"
+      }
+    },
     "dnsLabelPrefix": {
       "type": "string",
-      "defaultValue": "[toLower(format('{0}-{1}', parameters('workspacesName'), uniqueString(resourceGroup().id)))]",
+      "defaultValue": "[toLower(format('{0}-{1}', parameters('jupyterName'), uniqueString(resourceGroup().id)))]",
       "metadata": {
         "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
       }
@@ -85,41 +91,27 @@
     "accessCidrs": {
       "type": "array",
       "metadata": {
-        "description": "The CIDR ranges that can be used to communicate with the workspaces instance."
+        "description": "The CIDR ranges that can be used to communicate with the jupyter instance."
       }
     },
     "httpPort": {
       "type": "string",
-      "defaultValue": "3000",
+      "defaultValue": "8888",
       "metadata": {
-        "description": "port to access the workspaces service UI."
-      }
-    },
-    "grpcPort": {
-      "type": "string",
-      "defaultValue": "3282",
-      "metadata": {
-        "description": "port to access the workspaces service api."
+        "description": "port to access the jupyter service UI."
       }
     },
     "sshAccess": {
       "type": "bool",
       "defaultValue": false,
       "metadata": {
-        "description": "allow access the workspaces ssh port from the access cidr."
-      }
-    },
-    "customRoleName": {
-      "type": "string",
-      "defaultValue": "",
-      "metadata": {
-        "description": "Custom Role Name."
+        "description": "allow access the jupyter ssh port from the access cidr."
       }
     }
   },
   "variables": {
-    "$fxv#0": "#cloud-config\nwrite_files:\n- encoding: b64\n  content: \"{0}\"\n  owner: root:root\n  path: /usr/lib/systemd/system/workspaces.service\n  permissions: '0640'\n\nruncmd:\n- while [ $(systemctl status docker | grep \"active (running)\" | wc -l) -lt 1 ]; do sleep 5; done\n- sleep 60\n- systemctl enable workspaces.service\n- systemctl start workspaces.service",
-    "$fxv#1": "[Unit]\nDescription=workspaces\nAfter=docker.service\nRequires=docker.service\nStartLimitInterval=200\nStartLimitBurst=10\n\n[Service]\nTimeoutStartSec=0\nRestart=always\nRestartSec=2\nExecStartPre=-/usr/bin/mkdir -p /etc/td\nExecStartPre=-/usr/bin/docker exec %n stop || true\nExecStartPre=-/usr/bin/docker rm %n || true\nExecStartPre=/usr/bin/docker pull {0}/{1}:{2}\n\nExecStart=/usr/bin/docker run \\\n    -e accept_license=Y \\\n    -e PLATFORM=azure \\\n    -e ARM_USE_MSI=true \\\n    -e ARM_SUBSCRIPTION_ID={5} \\\n    -e ARM_TENANT_ID={6} \\\n    -v /etc/td:/etc/td \\\n    -p {3}:3000 \\\n    -p {4}:3282 \\\n    --rm --name %n {0}/{1}:{2} workspaces serve -v\n\n[Install]\nWantedBy=multi-user.target",
+    "$fxv#0": "#cloud-config\nwrite_files:\n- encoding: b64\n  content: \"{0}\"\n  owner: root:root\n  path: /usr/lib/systemd/system/jupyter.service\n  permissions: '0640'\n\nruncmd:\n- while [ $(systemctl status docker | grep \"active (running)\" | wc -l) -lt 1 ]; do sleep 5; done\n- sleep 60\n- systemctl enable jupyter.service\n- systemctl start jupyter.service",
+    "$fxv#1": "[Unit]\nDescription=jupyter\nAfter=docker.service\nRequires=docker.service\nStartLimitInterval=200\nStartLimitBurst=10\n\n[Service]\nTimeoutStartSec=0\nRestart=always\nRestartSec=2\nExecStartPre=-/usr/bin/mkdir -p /etc/td\nExecStartPre=-/usr/bin/docker exec %n stop || true\nExecStartPre=-/usr/bin/docker rm %n || true\nExecStartPre=/usr/bin/docker pull {0}/{1}:{2}\n\nExecStart=/usr/bin/docker run \\\n    -e accept_license=Y \\\n    -e JUPYTER_TOKEN=${4} \\\n    -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \\\n    -p {3}:8888 \\\n    --rm --name %n {0}/{1}:{2}\n\n[Install]\nWantedBy=multi-user.target",
     "imageReference": {
       "Ubuntu-1804": {
         "publisher": "Canonical",
@@ -140,8 +132,8 @@
         "version": "latest"
       }
     },
-    "publicIPAddressName": "[format('{0}PublicIP', parameters('workspacesName'))]",
-    "networkInterfaceName": "[format('{0}NetInt', parameters('workspacesName'))]",
+    "publicIPAddressName": "[format('{0}PublicIP', parameters('jupyterName'))]",
+    "networkInterfaceName": "[format('{0}NetInt', parameters('jupyterName'))]",
     "osDiskType": "Standard_LRS",
     "subnetAddressPrefix": "10.1.0.0/24",
     "addressPrefix": "10.1.0.0/16",
@@ -165,9 +157,9 @@
     "dockerExtensionPublisher": "Microsoft.Azure.Extensions",
     "dockerExtensionVersion": "1.1",
     "registry": "teradata",
-    "repository": "regulus-workspaces",
+    "repository": "regulus-jupyter",
     "version": "latest",
-    "cloudInitData": "[base64(format(variables('$fxv#0'), base64(format(variables('$fxv#1'), variables('registry'), variables('repository'), variables('version'), parameters('httpPort'), parameters('grpcPort'), subscription().subscriptionId, subscription().tenantId))))]"
+    "cloudInitData": "[base64(format(variables('$fxv#0'), base64(format(variables('$fxv#1'), variables('registry'), variables('repository'), variables('version'), parameters('httpPort'), parameters('jupyterToken')))))]"
   },
   "resources": [
     {
@@ -232,19 +224,6 @@
               "destinationAddressPrefix": "*",
               "destinationPortRange": "[parameters('httpPort')]"
             }
-          },
-          {
-            "name": "GRPC",
-            "properties": {
-              "priority": 702,
-              "protocol": "Tcp",
-              "access": "Allow",
-              "direction": "Inbound",
-              "sourceAddressPrefixes": "[parameters('accessCidrs')]",
-              "sourcePortRange": "*",
-              "destinationAddressPrefix": "*",
-              "destinationPortRange": "[parameters('grpcPort')]"
-            }
           }
         ]
       }
@@ -295,7 +274,7 @@
     {
       "type": "Microsoft.Compute/virtualMachines",
       "apiVersion": "2023-03-01",
-      "name": "[parameters('workspacesName')]",
+      "name": "[parameters('jupyterName')]",
       "location": "[parameters('location')]",
       "identity": {
         "type": "SystemAssigned"
@@ -321,7 +300,7 @@
           ]
         },
         "osProfile": {
-          "computerName": "[parameters('workspacesName')]",
+          "computerName": "[parameters('jupyterName')]",
           "adminUsername": "[parameters('adminUsername')]",
           "linuxConfiguration": "[variables('linuxConfiguration')]"
         },
@@ -342,7 +321,7 @@
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2022-03-01",
-      "name": "[format('{0}/{1}', parameters('workspacesName'), variables('trustedExtensionName'))]",
+      "name": "[format('{0}/{1}', parameters('jupyterName'), variables('trustedExtensionName'))]",
       "location": "[parameters('location')]",
       "properties": {
         "publisher": "[variables('trustedExtensionPublisher')]",
@@ -359,13 +338,13 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('jupyterName'))]"
       ]
     },
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
       "apiVersion": "2023-03-01",
-      "name": "[format('{0}/{1}', parameters('workspacesName'), variables('dockerExtensionName'))]",
+      "name": "[format('{0}/{1}', parameters('jupyterName'), variables('dockerExtensionName'))]",
       "location": "[parameters('location')]",
       "properties": {
         "publisher": "[variables('dockerExtensionPublisher')]",
@@ -374,95 +353,8 @@
         "autoUpgradeMinorVersion": true
       },
       "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
+        "[resourceId('Microsoft.Compute/virtualMachines', parameters('jupyterName'))]"
       ]
-    },
-    {
-      "condition": "[not(equals(parameters('customRoleName'), ''))]",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(subscription().id, resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), resourceId('Microsoft.Authorization/roleDefinitions', parameters('customRoleName')))]",
-      "properties": {
-        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', parameters('customRoleName'))]",
-        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), '2023-03-01', 'full').identity.principalId]"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
-      ]
-    },
-    {
-      "condition": "[equals(parameters('customRoleName'), '')]",
-      "type": "Microsoft.Authorization/roleAssignments",
-      "apiVersion": "2022-04-01",
-      "name": "[guid(subscription().id, resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName'))))]",
-      "properties": {
-        "roleDefinitionId": "[resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName')))]",
-        "principalId": "[reference(resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName')), '2023-03-01', 'full').identity.principalId]"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Authorization/roleDefinitions', format('{0}-custom-role', parameters('workspacesName')))]",
-        "[resourceId('Microsoft.Compute/virtualMachines', parameters('workspacesName'))]"
-      ]
-    },
-    {
-      "condition": "[equals(parameters('customRoleName'), '')]",
-      "type": "Microsoft.Authorization/roleDefinitions",
-      "apiVersion": "2022-04-01",
-      "name": "[format('{0}-custom-role', parameters('workspacesName'))]",
-      "properties": {
-        "roleName": "[format('Custom Role - Workspaces {0} Regulus Deployment Permissions', parameters('workspacesName'))]",
-        "description": "[format('Subscription level permissions for workspaces {0} to create regulus deployments', parameters('workspacesName'))]",
-        "type": "customRole",
-        "permissions": [
-          {
-            "actions": [
-              "Microsoft.Compute/disks/read",
-              "Microsoft.Compute/disks/write",
-              "Microsoft.Compute/disks/delete",
-              "Microsoft.Compute/sshPublicKeys/read",
-              "Microsoft.Compute/sshPublicKeys/write",
-              "Microsoft.Compute/sshPublicKeys/delete",
-              "Microsoft.Compute/virtualMachines/read",
-              "Microsoft.Compute/virtualMachines/write",
-              "Microsoft.Compute/virtualMachines/delete",
-              "Microsoft.KeyVault/vaults/read",
-              "Microsoft.KeyVault/vaults/write",
-              "Microsoft.KeyVault/vaults/delete",
-              "Microsoft.KeyVault/vaults/accessPolicies/write",
-              "Microsoft.KeyVault/locations/operationResults/read",
-              "Microsoft.KeyVault/locations/deletedVaults/purge/action",
-              "Microsoft.Network/virtualNetworks/read",
-              "Microsoft.Network/virtualNetworks/write",
-              "Microsoft.Network/virtualNetworks/delete",
-              "Microsoft.Network/virtualNetworks/subnets/read",
-              "Microsoft.Network/virtualNetworks/subnets/write",
-              "Microsoft.Network/virtualNetworks/subnets/delete",
-              "Microsoft.Network/virtualNetworks/subnets/join/action",
-              "Microsoft.Network/networkInterfaces/read",
-              "Microsoft.Network/networkInterfaces/write",
-              "Microsoft.Network/networkInterfaces/delete",
-              "Microsoft.Network/networkInterfaces/join/action",
-              "Microsoft.Network/networkSecurityGroups/read",
-              "Microsoft.Network/networkSecurityGroups/write",
-              "Microsoft.Network/networkSecurityGroups/delete",
-              "Microsoft.Network/networkSecurityGroups/securityRules/read",
-              "Microsoft.Network/networkSecurityGroups/securityRules/write",
-              "Microsoft.Network/networkSecurityGroups/securityRules/delete",
-              "Microsoft.Network/networkSecurityGroups/join/action",
-              "Microsoft.Network/publicIPAddresses/read",
-              "Microsoft.Network/publicIPAddresses/write",
-              "Microsoft.Network/publicIPAddresses/join/action",
-              "Microsoft.Network/publicIPAddresses/delete",
-              "Microsoft.Resources/subscriptions/resourcegroups/read",
-              "Microsoft.Resources/subscriptions/resourcegroups/write",
-              "Microsoft.Resources/subscriptions/resourcegroups/delete"
-            ]
-          }
-        ],
-        "assignableScopes": [
-          "[subscription().id]"
-        ]
-      }
     }
   ],
   "outputs": {
@@ -485,14 +377,6 @@
     "PrivateHttpAccess": {
       "type": "string",
       "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress, parameters('httpPort'))]"
-    },
-    "PublicGrpcAccess": {
-      "type": "string",
-      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn, parameters('grpcPort'))]"
-    },
-    "PrivateGrpcAccess": {
-      "type": "string",
-      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress, parameters('grpcPort'))]"
     },
     "SecurityGroup": {
       "type": "string",
