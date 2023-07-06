@@ -1,8 +1,8 @@
 @description('Name for the workspaces service virtual machine.')
-param workspacesName string = 'workspaces'
+param workspacesName string
 
 @description('Username for the workspaces service virtual machine.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('SSH public key value')
 @secure()
@@ -19,29 +19,26 @@ param dnsLabelPrefix string = toLower('${workspacesName}-${uniqueString(resource
 ])
 param ubuntuOSVersion string = 'Ubuntu-2004'
 
-@description('Location for all resources.')
-param location string = resourceGroup().location
-
 @description('The size of the VM')
 param vmSize string = 'Standard_D2s_v3'
 
-@description('Name of the VNET')
-param virtualNetworkName string = 'vNet'
-
-@description('Name of the subnet in the virtual network')
-param subnetName string = 'Subnet'
+@description('Name of the subnet to run Workspaces in')
+param subnetName string
 
 @description('Name of the Network Security Group')
-param networkSecurityGroupName string = 'SecGroupNet'
+param networkSecurityGroupName string = 'WorkspacesSecurityGroup'
 
 @description('The CIDR ranges that can be used to communicate with the workspaces instance.')
-param accessCidrs array
+param accessCidrs array = ['0.0.0.0/0']
 
 @description('port to access the workspaces service UI.')
 param httpPort string = '3000'
 
 @description('port to access the workspaces service api.')
 param grpcPort string = '3282'
+
+@description('GUID of the Workspaces Role')
+param roleDefinitionId string
 
 @description('allow access the workspaces ssh port from the access cidr.')
 param sshAccess bool = false
@@ -69,8 +66,6 @@ var imageReference = {
 var publicIPAddressName = '${workspacesName}PublicIP'
 var networkInterfaceName = '${workspacesName}NetInt'
 var osDiskType = 'Standard_LRS'
-var subnetAddressPrefix = '10.1.0.0/24'
-var addressPrefix = '10.1.0.0/16'
 var linuxConfiguration = {
   disablePasswordAuthentication: true
   ssh: {
@@ -113,16 +108,16 @@ var cloudInitData = base64(
   )
 )
 
-resource networkInterface 'Microsoft.Network/networkInterfaces@2021-05-01' = {
+resource networkInterface 'Microsoft.Network/networkInterfaces@2022-11-01' = {
   name: networkInterfaceName
-  location: location
+  location: resourceGroup().location
   properties: {
     ipConfigurations: [
       {
         name: 'ipconfig1'
         properties: {
           subnet: {
-            id: virtualNetworkName_subnet.id
+            id: subnetName 
           }
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
@@ -137,9 +132,9 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2021-05-01' = {
   }
 }
 
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-11-01' = {
   name: networkSecurityGroupName
-  location: location
+  location: resourceGroup().location
   properties: {
     securityRules: [
       {
@@ -185,36 +180,14 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-0
   }
 }
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2021-05-01' = {
-  name: virtualNetworkName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
-    }
-  }
-}
-
-resource virtualNetworkName_subnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  parent: virtualNetwork
-  name: subnetName
-  properties: {
-    addressPrefix: subnetAddressPrefix
-    privateEndpointNetworkPolicies: 'Enabled'
-    privateLinkServiceNetworkPolicies: 'Enabled'
-  }
-}
-
-resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
   name: publicIPAddressName
-  location: location
+  location: resourceGroup().location
   sku: {
     name: 'Basic'
   }
   properties: {
-    publicIPAllocationMethod: 'Dynamic'
+    publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
     dnsSettings: {
       domainNameLabel: dnsLabelPrefix
@@ -225,7 +198,7 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
 
 resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   name: workspacesName
-  location: location
+  location: resourceGroup().location
   identity: {
     type: 'SystemAssigned'
   }
@@ -256,7 +229,6 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
       linuxConfiguration: linuxConfiguration
     }
     securityProfile: {
-      encryptionAtHost: true
       securityType: 'TrustedLaunch'
       uefiSettings: {
         secureBootEnabled: true
@@ -267,12 +239,10 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   }
 }
 
-
-
-resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
+resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: trustedExtensionName
-  location: location
+  location: resourceGroup().location
   properties: {
     publisher: trustedExtensionPublisher
     type: trustedExtensionName
@@ -292,7 +262,7 @@ resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/ext
 resource workspacesName_extension_docker 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: dockerExtensionName
-  location: location
+  location: resourceGroup().location
   properties: {
     publisher: dockerExtensionPublisher
     type: dockerExtensionName
@@ -301,89 +271,19 @@ resource workspacesName_extension_docker 'Microsoft.Compute/virtualMachines/exte
   }
 }
 
-resource existingRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName != '') {
-  name: guid(subscription().id, vm.id, existingRoleDef.id)
+resource roleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
+  name:  roleDefinitionId
+}
+resource existingRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, resourceGroup().id, roleDef.id, vm.id)
   properties: {
-    roleDefinitionId: existingRoleDef.id
+    roleDefinitionId: roleDef.id
     principalId: vm.identity.principalId
-  }
-}
-
-resource newRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName == '') {
-  name: guid(subscription().id, vm.id, newRoleDef.id)
-  properties: {
-    roleDefinitionId: newRoleDef.id
-    principalId: vm.identity.principalId
-  }
-}
-
-@description('Custom Role Name.')
-param customRoleName string = ''
-
-resource existingRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = if (customRoleName != '') {
-  name: customRoleName
-}
-
-resource newRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (customRoleName == '') {
-  name:  '${workspacesName}-custom-role'
-  properties: {
-    roleName: 'Custom Role - Workspaces ${workspacesName} Regulus Deployment Permissions'
-    description: 'Subscription level permissions for workspaces ${workspacesName} to create regulus deployments'
-    type: 'customRole'
-    permissions: [
-      {
-        actions: [
-          'Microsoft.Compute/disks/read'
-          'Microsoft.Compute/disks/write'
-          'Microsoft.Compute/disks/delete'
-          'Microsoft.Compute/sshPublicKeys/read'
-          'Microsoft.Compute/sshPublicKeys/write'
-          'Microsoft.Compute/sshPublicKeys/delete'
-          'Microsoft.Compute/virtualMachines/read'
-          'Microsoft.Compute/virtualMachines/write'
-          'Microsoft.Compute/virtualMachines/delete'
-          'Microsoft.KeyVault/vaults/read'
-          'Microsoft.KeyVault/vaults/write'
-          'Microsoft.KeyVault/vaults/delete'
-          'Microsoft.KeyVault/vaults/accessPolicies/write'
-          'Microsoft.KeyVault/locations/operationResults/read'
-          'Microsoft.KeyVault/locations/deletedVaults/purge/action'
-          'Microsoft.Network/virtualNetworks/read'
-          'Microsoft.Network/virtualNetworks/write'
-          'Microsoft.Network/virtualNetworks/delete'
-          'Microsoft.Network/virtualNetworks/subnets/read'
-          'Microsoft.Network/virtualNetworks/subnets/write'
-          'Microsoft.Network/virtualNetworks/subnets/delete'
-          'Microsoft.Network/virtualNetworks/subnets/join/action'
-          'Microsoft.Network/networkInterfaces/read'
-          'Microsoft.Network/networkInterfaces/write'
-          'Microsoft.Network/networkInterfaces/delete'
-          'Microsoft.Network/networkInterfaces/join/action'
-          'Microsoft.Network/networkSecurityGroups/read'
-          'Microsoft.Network/networkSecurityGroups/write'
-          'Microsoft.Network/networkSecurityGroups/delete'
-          'Microsoft.Network/networkSecurityGroups/securityRules/read'
-          'Microsoft.Network/networkSecurityGroups/securityRules/write'
-          'Microsoft.Network/networkSecurityGroups/securityRules/delete'
-          'Microsoft.Network/networkSecurityGroups/join/action'
-          'Microsoft.Network/publicIPAddresses/read'
-          'Microsoft.Network/publicIPAddresses/write'
-          'Microsoft.Network/publicIPAddresses/join/action'
-          'Microsoft.Network/publicIPAddresses/delete'
-          'Microsoft.Resources/subscriptions/resourcegroups/read'
-          'Microsoft.Resources/subscriptions/resourcegroups/write'
-          'Microsoft.Resources/subscriptions/resourcegroups/delete'
-        ]
-      }
-    ]
-    assignableScopes: [
-      subscription().id
-    ]
   }
 }
 
 output AdminUsername string = adminUsername
-output PublicIP string = publicIPAddress.properties.ipAddress
+// output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
 output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'

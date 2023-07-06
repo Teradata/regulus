@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.18.4.5664",
-      "templateHash": "3802902211667631024"
+      "templateHash": "10658257813281235055"
     }
   },
   "parameters": {
@@ -67,18 +67,11 @@
         "description": "The size of the VM"
       }
     },
-    "virtualNetworkName": {
+    "subnetID": {
       "type": "string",
-      "defaultValue": "vNet",
+      "defaultValue": "/subscriptions/4b46d749-f8dc-481d-af40-35dd76b7424d/resourceGroups/ARM_TESTS/providers/Microsoft.Network/virtualNetworks/vNet/subnets/Subnet",
       "metadata": {
-        "description": "Name of the VNET"
-      }
-    },
-    "subnetName": {
-      "type": "string",
-      "defaultValue": "Subnet",
-      "metadata": {
-        "description": "Name of the subnet in the virtual network"
+        "description": "ID of the subnet in the virtual network"
       }
     },
     "networkSecurityGroupName": {
@@ -111,7 +104,7 @@
   },
   "variables": {
     "$fxv#0": "#cloud-config\nwrite_files:\n- encoding: b64\n  content: \"{0}\"\n  owner: root:root\n  path: /usr/lib/systemd/system/jupyter.service\n  permissions: '0640'\n\nruncmd:\n- while [ $(systemctl status docker | grep \"active (running)\" | wc -l) -lt 1 ]; do sleep 5; done\n- sleep 60\n- systemctl enable jupyter.service\n- systemctl start jupyter.service",
-    "$fxv#1": "[Unit]\nDescription=jupyter\nAfter=docker.service\nRequires=docker.service\nStartLimitInterval=200\nStartLimitBurst=10\n\n[Service]\nTimeoutStartSec=0\nRestart=always\nRestartSec=2\nExecStartPre=-/usr/bin/mkdir -p /etc/td\nExecStartPre=-/usr/bin/docker exec %n stop || true\nExecStartPre=-/usr/bin/docker rm %n || true\nExecStartPre=/usr/bin/docker pull {0}/{1}:{2}\n\nExecStart=/usr/bin/docker run \\\n    -e accept_license=Y \\\n    -e JUPYTER_TOKEN=${4} \\\n    -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \\\n    -p {3}:8888 \\\n    --rm --name %n {0}/{1}:{2}\n\n[Install]\nWantedBy=multi-user.target",
+    "$fxv#1": "[Unit]\nDescription=jupyter\nAfter=docker.service\nRequires=docker.service\nStartLimitInterval=200\nStartLimitBurst=10\n\n[Service]\nTimeoutStartSec=0\nRestart=always\nRestartSec=2\nExecStartPre=-/usr/bin/mkdir -p /etc/td\nExecStartPre=-/usr/bin/docker exec %n stop || true\nExecStartPre=-/usr/bin/docker rm %n || true\nExecStartPre=/usr/bin/docker pull {0}/{1}:{2}\n\nExecStart=/usr/bin/docker run \\\n    -e accept_license=Y \\\n    -e JUPYTER_TOKEN={4} \\\n    -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \\\n    -p {3}:8888 \\\n    --rm --name %n {0}/{1}:{2}\n\n[Install]\nWantedBy=multi-user.target\n",
     "imageReference": {
       "Ubuntu-1804": {
         "publisher": "Canonical",
@@ -164,7 +157,7 @@
   "resources": [
     {
       "type": "Microsoft.Network/networkInterfaces",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-11-01",
       "name": "[variables('networkInterfaceName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -173,7 +166,7 @@
             "name": "ipconfig1",
             "properties": {
               "subnet": {
-                "id": "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+                "id": "[parameters('subnetID')]"
               },
               "privateIPAllocationMethod": "Dynamic",
               "publicIPAddress": {
@@ -188,13 +181,12 @@
       },
       "dependsOn": [
         "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]",
-        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]",
-        "[resourceId('Microsoft.Network/virtualNetworks/subnets', parameters('virtualNetworkName'), parameters('subnetName'))]"
+        "[resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName'))]"
       ]
     },
     {
       "type": "Microsoft.Network/networkSecurityGroups",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-11-01",
       "name": "[parameters('networkSecurityGroupName')]",
       "location": "[parameters('location')]",
       "properties": {
@@ -229,41 +221,15 @@
       }
     },
     {
-      "type": "Microsoft.Network/virtualNetworks",
-      "apiVersion": "2021-05-01",
-      "name": "[parameters('virtualNetworkName')]",
-      "location": "[parameters('location')]",
-      "properties": {
-        "addressSpace": {
-          "addressPrefixes": [
-            "[variables('addressPrefix')]"
-          ]
-        }
-      }
-    },
-    {
-      "type": "Microsoft.Network/virtualNetworks/subnets",
-      "apiVersion": "2021-05-01",
-      "name": "[format('{0}/{1}', parameters('virtualNetworkName'), parameters('subnetName'))]",
-      "properties": {
-        "addressPrefix": "[variables('subnetAddressPrefix')]",
-        "privateEndpointNetworkPolicies": "Enabled",
-        "privateLinkServiceNetworkPolicies": "Enabled"
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.Network/virtualNetworks', parameters('virtualNetworkName'))]"
-      ]
-    },
-    {
       "type": "Microsoft.Network/publicIPAddresses",
-      "apiVersion": "2021-05-01",
+      "apiVersion": "2022-11-01",
       "name": "[variables('publicIPAddressName')]",
       "location": "[parameters('location')]",
       "sku": {
         "name": "Basic"
       },
       "properties": {
-        "publicIPAllocationMethod": "Dynamic",
+        "publicIPAllocationMethod": "Static",
         "publicIPAddressVersion": "IPv4",
         "dnsSettings": {
           "domainNameLabel": "[parameters('dnsLabelPrefix')]"
@@ -305,7 +271,6 @@
           "linuxConfiguration": "[variables('linuxConfiguration')]"
         },
         "securityProfile": {
-          "encryptionAtHost": true,
           "securityType": "TrustedLaunch",
           "uefiSettings": {
             "secureBootEnabled": true,
@@ -320,7 +285,7 @@
     },
     {
       "type": "Microsoft.Compute/virtualMachines/extensions",
-      "apiVersion": "2022-03-01",
+      "apiVersion": "2023-03-01",
       "name": "[format('{0}/{1}', parameters('jupyterName'), variables('trustedExtensionName'))]",
       "location": "[parameters('location')]",
       "properties": {
@@ -364,19 +329,19 @@
     },
     "PublicIP": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').ipAddress]"
+      "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').ipAddress]"
     },
     "PrivateIP": {
       "type": "string",
-      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress]"
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2022-11-01').ipConfigurations[0].properties.privateIPAddress]"
     },
     "PublicHttpAccess": {
       "type": "string",
-      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn, parameters('httpPort'))]"
+      "value": "[format('http://{0}:{1}?token={2}', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').dnsSettings.fqdn, parameters('httpPort'), parameters('jupyterToken'))]"
     },
     "PrivateHttpAccess": {
       "type": "string",
-      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress, parameters('httpPort'))]"
+      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2022-11-01').ipConfigurations[0].properties.privateIPAddress, parameters('httpPort'))]"
     },
     "SecurityGroup": {
       "type": "string",
@@ -384,7 +349,7 @@
     },
     "sshCommand": {
       "type": "string",
-      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn)]"
+      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').dnsSettings.fqdn)]"
     }
   }
 }

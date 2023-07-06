@@ -29,11 +29,8 @@ param location string = resourceGroup().location
 @description('The size of the VM')
 param vmSize string = 'Standard_D2s_v3'
 
-@description('Name of the VNET')
-param virtualNetworkName string = 'vNet'
-
-@description('Name of the subnet in the virtual network')
-param subnetName string = 'Subnet'
+@description('ID of the subnet in the virtual network')
+param subnetID string = '/subscriptions/4b46d749-f8dc-481d-af40-35dd76b7424d/resourceGroups/ARM_TESTS/providers/Microsoft.Network/virtualNetworks/vNet/subnets/Subnet'
 
 @description('Name of the Network Security Group')
 param networkSecurityGroupName string = 'SecGroupNet'
@@ -112,7 +109,7 @@ var cloudInitData = base64(
   )
 )
 
-resource networkInterface 'Microsoft.Network/networkInterfaces@2021-05-01' = {
+resource networkInterface 'Microsoft.Network/networkInterfaces@2022-11-01' = {
   name: networkInterfaceName
   location: location
   properties: {
@@ -121,7 +118,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2021-05-01' = {
         name: 'ipconfig1'
         properties: {
           subnet: {
-            id: virtualNetworkName_subnet.id
+            id: subnetID
           }
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
@@ -136,7 +133,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2021-05-01' = {
   }
 }
 
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-01' = {
+resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-11-01' = {
   name: networkSecurityGroupName
   location: location
   properties: {
@@ -171,36 +168,14 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2021-05-0
   }
 }
 
-resource virtualNetwork 'Microsoft.Network/virtualNetworks@2021-05-01' = {
-  name: virtualNetworkName
-  location: location
-  properties: {
-    addressSpace: {
-      addressPrefixes: [
-        addressPrefix
-      ]
-    }
-  }
-}
-
-resource virtualNetworkName_subnet 'Microsoft.Network/virtualNetworks/subnets@2021-05-01' = {
-  parent: virtualNetwork
-  name: subnetName
-  properties: {
-    addressPrefix: subnetAddressPrefix
-    privateEndpointNetworkPolicies: 'Enabled'
-    privateLinkServiceNetworkPolicies: 'Enabled'
-  }
-}
-
-resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2021-05-01' = {
+resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
   name: publicIPAddressName
   location: location
   sku: {
     name: 'Basic'
   }
   properties: {
-    publicIPAllocationMethod: 'Dynamic'
+    publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
     dnsSettings: {
       domainNameLabel: dnsLabelPrefix
@@ -242,7 +217,6 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
       linuxConfiguration: linuxConfiguration
     }
     securityProfile: {
-      encryptionAtHost: true
       securityType: 'TrustedLaunch'
       uefiSettings: {
         secureBootEnabled: true
@@ -255,7 +229,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
 
 
 
-resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2022-03-01' = {
+resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: trustedExtensionName
   location: location
@@ -290,7 +264,7 @@ resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensi
 output AdminUsername string = adminUsername
 output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
-output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }'
+output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }?token=${ jupyterToken }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
 output SecurityGroup string = networkSecurityGroup.id
 output sshCommand string = 'ssh ${adminUsername}@${publicIPAddress.properties.dnsSettings.fqdn}'

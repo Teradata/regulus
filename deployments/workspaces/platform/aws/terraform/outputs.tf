@@ -25,3 +25,7 @@ output "public_grpc_access_workspaces" {
 output "security_group" {
   value = aws_security_group.this.id
 }
+
+output "ssh_connection" {
+  value = "ssh ec2-user@${aws_instance.this.public_ip}"
+}
