@@ -39,7 +39,7 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_access_cidrs"></a> [access\_cidrs](#input\_access\_cidrs) | n/a | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
 | <a name="input_access_security_groups"></a> [access\_security\_groups](#input\_access\_security\_groups) | n/a | `list(string)` | `[]` | no |
-| <a name="input_egress_cidr"></a> [egress\_cidr](#input\_egress\_cidr) | n/a | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
+| <a name="input_egress_cidrs"></a> [egress\_cidrs](#input\_egress\_cidrs) | n/a | `list(string)` | <pre>[<br>  "0.0.0.0/0"<br>]</pre> | no |
 | <a name="input_grpc_port"></a> [grpc\_port](#input\_grpc\_port) | n/a | `number` | `3282` | no |
 | <a name="input_http_port"></a> [http\_port](#input\_http\_port) | n/a | `number` | `3000` | no |
 | <a name="input_instance_type"></a> [instance\_type](#input\_instance\_type) | n/a | `string` | `"t3.large"` | no |
@@ -66,4 +66,5 @@ No modules.
 | <a name="output_public_http_access_workspaces"></a> [public\_http\_access\_workspaces](#output\_public\_http\_access\_workspaces) | n/a |
 | <a name="output_public_ip_workspaces"></a> [public\_ip\_workspaces](#output\_public\_ip\_workspaces) | n/a |
 | <a name="output_security_group"></a> [security\_group](#output\_security\_group) | n/a |
+| <a name="output_ssh_connection"></a> [ssh\_connection](#output\_ssh\_connection) | n/a |
 <!-- END_TF_DOCS -->
