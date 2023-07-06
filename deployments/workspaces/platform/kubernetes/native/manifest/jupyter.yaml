@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: regulus-jupyter
+  labels:
+    app: regulus-jupyter
+spec:
+  ports:
+    - port: 8888
+  selector:
+    app: regulus-jupyter
+    tier: jupyter
+  clusterIP: None
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: regulus-jupyter-pv-claim
+  labels:
+    app: regulus-jupyter
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: regulus-jupyter
+  labels:
+    app: regulus-jupyter
+spec:
+  selector:
+    matchLabels:
+      app: regulus-jupyter
+      tier: jupyter
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: regulus-jupyter
+        tier: jupyter
+    spec:
+      containers:
+      - image: regulus-jupyter:latest
+        name: regulus-jupyter
+        ports:
+        - containerPort: 8888
+          name: jupyter
+        volumeMounts:
+        - name: regulus-jupyter-persistent-storage
+          mountPath: /home/jovyan/JupyterLabRoot/userdata
+      volumes:
+      - name: regulus-jupyter-persistent-storage
+        persistentVolumeClaim:
+          claimName: regulus-jupyter-pv-claim
