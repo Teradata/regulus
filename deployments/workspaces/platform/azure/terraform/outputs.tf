@@ -26,7 +26,6 @@ output "security_group" {
   value = azurerm_network_security_group.this.id
 }
 
-
 output "ssh_connection" {
   value = "ssh azureuser@${data.azurerm_public_ip.this.ip_address}"
 }
