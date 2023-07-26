@@ -1,3 +1,8 @@
+targetScope = 'subscription'
+
+@description('name for the resource group.')
+param resourceGroupName string = 'workspaces'
+
 @description('Name for the workspaces service virtual machine.')
 param workspacesName string
 
@@ -8,8 +13,8 @@ param adminUsername string = 'azureuser'
 @secure()
 param sshPublicKey string
 
-@description('Unique DNS Name for the Public IP used to access the Virtual Machine.')
-param dnsLabelPrefix string = toLower('${workspacesName}-${uniqueString(resourceGroup().id)}')
+@description('Unique DNS Name prefix for the Public IP used to access the Virtual Machine.')
+param dnsLabelPrefix string
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
 @allowed([
@@ -21,6 +26,9 @@ param ubuntuOSVersion string = 'Ubuntu-2004'
 
 @description('The size of the VM')
 param vmSize string = 'Standard_D2s_v3'
+
+@description('Name of the subnet to run Workspaces in')
+param  networkName string
 
 @description('Name of the subnet to run Workspaces in')
 param subnetName string
@@ -43,251 +51,68 @@ param roleDefinitionId string
 @description('allow access the workspaces ssh port from the access cidr.')
 param sshAccess bool = false
 
-var imageReference = {
-  'Ubuntu-1804': {
-    publisher: 'Canonical'
-    offer: 'UbuntuServer'
-    sku: '18_04-lts-gen2'
-    version: 'latest'
-  }
-  'Ubuntu-2004': {
-    publisher: 'Canonical'
-    offer: '0001-com-ubuntu-server-focal'
-    sku: '20_04-lts-gen2'
-    version: 'latest'
-  }
-  'Ubuntu-2204': {
-    publisher: 'Canonical'
-    offer: '0001-com-ubuntu-server-jammy'
-    sku: '22_04-lts-gen2'
-    version: 'latest'
-  }
+var roleAssignmentName = guid(subscription().id, workspacesName, rg.id , roleDefinitionId)
+
+resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' existing = {
+  name: resourceGroupName
 }
-var publicIPAddressName = '${workspacesName}PublicIP'
-var networkInterfaceName = '${workspacesName}NetInt'
-var osDiskType = 'Standard_LRS'
-var linuxConfiguration = {
-  disablePasswordAuthentication: true
-  ssh: {
-    publicKeys: [
-      {
-        path: '/home/${adminUsername}/.ssh/authorized_keys'
-        keyData: sshPublicKey
-      }
-    ]
+
+resource network 'Microsoft.Network/virtualNetworks@2022-11-01' existing = {
+  scope: rg
+  name: networkName
+}
+
+resource subnet 'Microsoft.Network/virtualNetworks/subnets@2022-11-01' existing = {
+  parent: network
+  name: subnetName
+}
+
+module firewall 'modules/firewall.bicep' = {
+  scope: rg
+  name: 'firewall'
+  params: {
+    location: rg.location
+    name: networkSecurityGroupName
+    accessCidrs: accessCidrs
+    sshAccess: sshAccess
+    httpPort: httpPort
+    grpcPort: grpcPort
   }
 }
 
-var trustedExtensionName = 'GuestAttestation'
-var trustedExtensionPublisher = 'Microsoft.Azure.Security.LinuxAttestation'
-var trustedExtensionVersion = '1.0'
-var trustedMaaTenantName = 'GuestAttestation'
-var trustedMaaEndpoint = substring('emptystring', 0, 0)
-var dockerExtensionName = 'DockerExtension'
-var dockerExtensionPublisher = 'Microsoft.Azure.Extensions'
-var dockerExtensionVersion = '1.1'
+module workspaces 'modules/instance.bicep' = {
+  scope: rg
+  name: 'workspaces'
+  params: {
+    location: rg.location
+    name: workspacesName
+    adminUsername: adminUsername
+    sshPublicKey: sshPublicKey
+    dnsLabelPrefix: dnsLabelPrefix
+    vmSize: vmSize
+    subnetId: subnet.id
+    networkSecurityGroupID: firewall.outputs.Id
+    httpPort: httpPort
+    grpcPort: grpcPort
+    ubuntuOSVersion: ubuntuOSVersion
+  }
+}
 
-var registry = 'teradata'
-var repository = 'regulus-workspaces'
-var version = 'latest'
-var cloudInitData = base64(
-  format(
-    loadTextContent('templates/cloudinit.yaml'), 
-    base64(
-      format(
-        loadTextContent('templates/workspaces.service'),
-        registry,
-        repository,
-        version,
-        httpPort,
-        grpcPort,
-        subscription().subscriptionId,
-        subscription().tenantId 
-      )
-    )
-  )
-)
-
-resource networkInterface 'Microsoft.Network/networkInterfaces@2022-11-01' = {
-  name: networkInterfaceName
-  location: resourceGroup().location
+resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  scope: subscription()
+  name: roleAssignmentName
   properties: {
-    ipConfigurations: [
-      {
-        name: 'ipconfig1'
-        properties: {
-          subnet: {
-            id: subnetName 
-          }
-          privateIPAllocationMethod: 'Dynamic'
-          publicIPAddress: {
-            id: publicIPAddress.id
-          }
-        }
-      }
-    ]
-    networkSecurityGroup: {
-      id: networkSecurityGroup.id
-    }
-  }
-}
-
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-11-01' = {
-  name: networkSecurityGroupName
-  location: resourceGroup().location
-  properties: {
-    securityRules: [
-      {
-        name: 'SSH'
-        properties: {
-          priority: 700
-          protocol: 'Tcp'
-          access: sshAccess ? 'Allow' : 'Deny'
-          direction: 'Inbound'
-          sourceAddressPrefixes: accessCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: '22'
-        }
-      }
-      {
-        name: 'HTTP'
-        properties: {
-          priority: 701
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefixes: accessCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: httpPort
-        }
-      }
-      {
-        name: 'GRPC'
-        properties: {
-          priority: 702
-          protocol: 'Tcp'
-          access: 'Allow'
-          direction: 'Inbound'
-          sourceAddressPrefixes: accessCidrs
-          sourcePortRange: '*'
-          destinationAddressPrefix: '*'
-          destinationPortRange: grpcPort
-        }
-      }
-    ]
-  }
-}
-
-resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
-  name: publicIPAddressName
-  location: resourceGroup().location
-  sku: {
-    name: 'Basic'
-  }
-  properties: {
-    publicIPAllocationMethod: 'Static'
-    publicIPAddressVersion: 'IPv4'
-    dnsSettings: {
-      domainNameLabel: dnsLabelPrefix
-    }
-    idleTimeoutInMinutes: 4
-  }
-}
-
-resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
-  name: workspacesName
-  location: resourceGroup().location
-  identity: {
-    type: 'SystemAssigned'
-  }
-  properties: {
-    hardwareProfile: {
-      vmSize: vmSize
-    }
-    storageProfile: {
-      osDisk: {
-        createOption: 'FromImage'
-        managedDisk: {
-          storageAccountType: osDiskType
-        }
-      }
-      imageReference: imageReference[ubuntuOSVersion]
-    }
-    networkProfile: {
-      networkInterfaces: [
-        {
-          id: networkInterface.id
-        }
-      ]
-    }
-    
-    osProfile: {
-      computerName: workspacesName
-      adminUsername: adminUsername
-      linuxConfiguration: linuxConfiguration
-    }
-    securityProfile: {
-      securityType: 'TrustedLaunch'
-      uefiSettings: {
-        secureBootEnabled: true
-        vTpmEnabled: true
-      }
-    }
-    userData: cloudInitData
-  }
-}
-
-resource workspacesName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
-  parent: vm
-  name: trustedExtensionName
-  location: resourceGroup().location
-  properties: {
-    publisher: trustedExtensionPublisher
-    type: trustedExtensionName
-    typeHandlerVersion: trustedExtensionVersion
-    autoUpgradeMinorVersion: true
-    settings: {
-      AttestationConfig: {
-        MaaSettings: {
-          maaEndpoint: trustedMaaEndpoint
-          maaTenantName: trustedMaaTenantName
-        }
-      }
-    }
-  }
-}
-
-resource workspacesName_extension_docker 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
-  parent: vm
-  name: dockerExtensionName
-  location: resourceGroup().location
-  properties: {
-    publisher: dockerExtensionPublisher
-    type: dockerExtensionName
-    typeHandlerVersion: dockerExtensionVersion
-    autoUpgradeMinorVersion: true
-  }
-}
-
-resource roleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = {
-  name:  roleDefinitionId
-}
-resource existingRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(subscription().id, resourceGroup().id, roleDef.id, vm.id)
-  properties: {
-    roleDefinitionId: roleDef.id
-    principalId: vm.identity.principalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', roleDefinitionId)
+    principalId: workspaces.outputs.PrincipleId
   }
 }
 
 output AdminUsername string = adminUsername
-// output PublicIP string = publicIPAddress.properties.ipAddress
-output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
-output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }'
-output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
-output PublicGrpcAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ grpcPort }'
-output PrivateGrpcAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ grpcPort }'
-output SecurityGroup string = networkSecurityGroup.id
-output sshCommand string = 'ssh ${adminUsername}@${publicIPAddress.properties.dnsSettings.fqdn}'
+output PublicIP string = workspaces.outputs.PublicIP
+output PrivateIP string = workspaces.outputs.PrivateIP
+output PublicHttpAccess string = 'http://${ workspaces.outputs.PublicIP }:${ httpPort }'
+output PrivateHttpAccess string = 'http://${ workspaces.outputs.PrivateIP }:${ httpPort }'
+output PublicGrpcAccess string = 'http://${ workspaces.outputs.PublicIP }:${ grpcPort }'
+output PrivateGrpcAccess string = 'http://${ workspaces.outputs.PrivateIP }:${ grpcPort }'
+output SecurityGroup string = firewall.outputs.Id
+output sshCommand string = 'ssh ${adminUsername}@${workspaces.outputs.PublicIP}'

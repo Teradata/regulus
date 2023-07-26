@@ -23,4 +23,5 @@ resource subnet 'Microsoft.Network/virtualNetworks/subnets@2022-11-01' = {
   }
 }
 
-output subnetId string = subnet.id
+output subnetName string = subnet.name
+output networkName string = network.name

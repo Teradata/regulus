@@ -2,7 +2,7 @@
 param jupyterName string = 'jupyter'
 
 @description('Username for the jupyter service virtual machine.')
-param adminUsername string
+param adminUsername string = 'azureuser'
 
 @description('SSH public key value')
 @secure()
@@ -13,7 +13,7 @@ param sshPublicKey string
 param jupyterToken string
 
 @description('Unique DNS Name for the Public IP used to access the Virtual Machine.')
-param dnsLabelPrefix string = toLower('${jupyterName}-${uniqueString(resourceGroup().id)}')
+param dnsLabelPrefix string
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
 @allowed([
@@ -23,20 +23,17 @@ param dnsLabelPrefix string = toLower('${jupyterName}-${uniqueString(resourceGro
 ])
 param ubuntuOSVersion string = 'Ubuntu-2004'
 
-@description('Location for all resources.')
-param location string = resourceGroup().location
-
 @description('The size of the VM')
 param vmSize string = 'Standard_D2s_v3'
 
 @description('ID of the subnet in the virtual network')
-param subnetID string = '/subscriptions/4b46d749-f8dc-481d-af40-35dd76b7424d/resourceGroups/ARM_TESTS/providers/Microsoft.Network/virtualNetworks/vNet/subnets/Subnet'
+param networkName string
 
-@description('Name of the Network Security Group')
-param networkSecurityGroupName string = 'SecGroupNet'
+@description('ID of the subnet in the virtual network')
+param subnetName string
 
 @description('The CIDR ranges that can be used to communicate with the jupyter instance.')
-param accessCidrs array
+param accessCidrs array = ['0.0.0.0/0']
 
 @description('port to access the jupyter service UI.')
 param httpPort string = '8888'
@@ -66,9 +63,9 @@ var imageReference = {
 }
 var publicIPAddressName = '${jupyterName}PublicIP'
 var networkInterfaceName = '${jupyterName}NetInt'
+var networkSecurityGroupName = '${jupyterName}SecGroup'
+
 var osDiskType = 'Standard_LRS'
-var subnetAddressPrefix = '10.1.0.0/24'
-var addressPrefix = '10.1.0.0/16'
 var linuxConfiguration = {
   disablePasswordAuthentication: true
   ssh: {
@@ -109,16 +106,25 @@ var cloudInitData = base64(
   )
 )
 
+resource network 'Microsoft.Network/virtualNetworks@2022-11-01' existing = {
+  name: networkName
+}
+
+resource subnet 'Microsoft.Network/virtualNetworks/subnets@2022-11-01' existing = {
+  parent: network
+  name: subnetName
+}
+
 resource networkInterface 'Microsoft.Network/networkInterfaces@2022-11-01' = {
   name: networkInterfaceName
-  location: location
+  location: resourceGroup().location
   properties: {
     ipConfigurations: [
       {
         name: 'ipconfig1'
         properties: {
           subnet: {
-            id: subnetID
+            id: subnet.id
           }
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
@@ -135,7 +141,7 @@ resource networkInterface 'Microsoft.Network/networkInterfaces@2022-11-01' = {
 
 resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-11-01' = {
   name: networkSecurityGroupName
-  location: location
+  location: resourceGroup().location
   properties: {
     securityRules: [
       {
@@ -170,7 +176,7 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-11-0
 
 resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
   name: publicIPAddressName
-  location: location
+  location: resourceGroup().location
   sku: {
     name: 'Basic'
   }
@@ -186,7 +192,7 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
 
 resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
   name: jupyterName
-  location: location
+  location: resourceGroup().location
   identity: {
     type: 'SystemAssigned'
   }
@@ -232,7 +238,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
 resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: trustedExtensionName
-  location: location
+  location: resourceGroup().location
   properties: {
     publisher: trustedExtensionPublisher
     type: trustedExtensionName
@@ -252,7 +258,7 @@ resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extens
 resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
   name: dockerExtensionName
-  location: location
+  location: resourceGroup().location
   properties: {
     publisher: dockerExtensionPublisher
     type: dockerExtensionName
@@ -264,7 +270,6 @@ resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensi
 output AdminUsername string = adminUsername
 output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
-output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }?token=${ jupyterToken }'
+output PublicHttpAccess string = 'http://${ publicIPAddress.properties.ipAddress }:${ httpPort }?token=${ jupyterToken }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
-output SecurityGroup string = networkSecurityGroup.id
-output sshCommand string = 'ssh ${adminUsername}@${publicIPAddress.properties.dnsSettings.fqdn}'
+output sshCommand string = 'ssh ${ adminUsername }@${ publicIPAddress.properties.ipAddress }'

@@ -1,7 +1,7 @@
 targetScope = 'subscription'
 
 @description('name for the resource group and derived network name.')
-param resourceGroupName string = 'workspaces'
+param name string = 'workspaces'
 
 @description('...')
 @allowed(['West US'])
@@ -14,7 +14,7 @@ param networkCidr array = ['10.0.0.0/16']
 param subnetCidr string = '10.0.0.0/24'
 
 resource rg 'Microsoft.Resources/resourceGroups@2022-09-01' = {
-  name: resourceGroupName
+  name: name
   location: location
 }
 
@@ -22,7 +22,7 @@ module network './modules/network.bicep' = {
   scope: rg
   name: 'networkDeployment'
   params: {
-    networkName: resourceGroupName
+    networkName: name
     networkCidr: networkCidr
     subnetCidr: subnetCidr
     location: location
@@ -32,7 +32,7 @@ module network './modules/network.bicep' = {
 resource roleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
   name:  guid(subscription().id, rg.id)
   properties: {
-    roleName: 'Custom Role - Workspaces ${resourceGroupName} Regulus Deployment Permissions'
+    roleName: 'Custom Role - Workspaces ${name} Regulus Deployment Permissions'
     description: 'Subscription level permissions for workspaces to create regulus deployments in there own resource groups'
     type: 'customRole'
     permissions: [
@@ -53,6 +53,11 @@ resource roleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
           'Microsoft.KeyVault/vaults/accessPolicies/write'
           'Microsoft.KeyVault/locations/operationResults/read'
           'Microsoft.KeyVault/locations/deletedVaults/purge/action'
+          'Microsoft.ManagedIdentity/userAssignedIdentities/delete'
+          'Microsoft.ManagedIdentity/userAssignedIdentities/assign/action'
+          'Microsoft.ManagedIdentity/userAssignedIdentities/listAssociatedResources/action'
+          'Microsoft.ManagedIdentity/userAssignedIdentities/read'
+          'Microsoft.ManagedIdentity/userAssignedIdentities/write'
           'Microsoft.Network/virtualNetworks/read'
           'Microsoft.Network/virtualNetworks/write'
           'Microsoft.Network/virtualNetworks/delete'
@@ -87,5 +92,6 @@ resource roleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
   }
 }
 
-output RoleDefinitionId string = roleDef.id
-output SubnetId string = network.outputs.subnetId
+output RoleDefinitionId string = roleDef.name
+output NetworkName string = network.outputs.networkName
+output SubnetName string = network.outputs.subnetName
