@@ -287,10 +287,99 @@ resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensi
   }
 }
 
+<<<<<<<< HEAD:deployments/jupyter/platform/azure/resource-manager-template/arm-template.bicep
+========
+resource existingRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName != '') {
+  name: guid(subscription().id, vm.id, existingRoleDef.id)
+  properties: {
+    roleDefinitionId: existingRoleDef.id
+    principalId: vm.identity.principalId
+  }
+}
+
+resource newRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (customRoleName == '') {
+  name: guid(subscription().id, vm.id, newRoleDef.id)
+  properties: {
+    roleDefinitionId: newRoleDef.id
+    principalId: vm.identity.principalId
+  }
+}
+
+@description('Custom Role Name.')
+param customRoleName string = ''
+
+resource existingRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' existing = if (customRoleName != '') {
+  name: customRoleName
+}
+
+resource newRoleDef 'Microsoft.Authorization/roleDefinitions@2022-04-01' = if (customRoleName == '') {
+  name:  '${workspacesName}-custom-role'
+  properties: {
+    roleName: 'Custom Role - Workspaces ${workspacesName} Regulus Deployment Permissions'
+    description: 'Subscription level permissions for workspaces ${workspacesName} to create regulus deployments'
+    type: 'customRole'
+    permissions: [
+      {
+        actions: [
+          'Microsoft.Compute/disks/read'
+          'Microsoft.Compute/disks/write'
+          'Microsoft.Compute/disks/delete'
+          'Microsoft.Compute/sshPublicKeys/read'
+          'Microsoft.Compute/sshPublicKeys/write'
+          'Microsoft.Compute/sshPublicKeys/delete'
+          'Microsoft.Compute/virtualMachines/read'
+          'Microsoft.Compute/virtualMachines/write'
+          'Microsoft.Compute/virtualMachines/delete'
+          'Microsoft.KeyVault/vaults/read'
+          'Microsoft.KeyVault/vaults/write'
+          'Microsoft.KeyVault/vaults/delete'
+          'Microsoft.KeyVault/vaults/accessPolicies/write'
+          'Microsoft.KeyVault/locations/operationResults/read'
+          'Microsoft.KeyVault/locations/deletedVaults/purge/action'
+          'Microsoft.Network/virtualNetworks/read'
+          'Microsoft.Network/virtualNetworks/write'
+          'Microsoft.Network/virtualNetworks/delete'
+          'Microsoft.Network/virtualNetworks/subnets/read'
+          'Microsoft.Network/virtualNetworks/subnets/write'
+          'Microsoft.Network/virtualNetworks/subnets/delete'
+          'Microsoft.Network/virtualNetworks/subnets/join/action'
+          'Microsoft.Network/networkInterfaces/read'
+          'Microsoft.Network/networkInterfaces/write'
+          'Microsoft.Network/networkInterfaces/delete'
+          'Microsoft.Network/networkInterfaces/join/action'
+          'Microsoft.Network/networkSecurityGroups/read'
+          'Microsoft.Network/networkSecurityGroups/write'
+          'Microsoft.Network/networkSecurityGroups/delete'
+          'Microsoft.Network/networkSecurityGroups/securityRules/read'
+          'Microsoft.Network/networkSecurityGroups/securityRules/write'
+          'Microsoft.Network/networkSecurityGroups/securityRules/delete'
+          'Microsoft.Network/networkSecurityGroups/join/action'
+          'Microsoft.Network/publicIPAddresses/read'
+          'Microsoft.Network/publicIPAddresses/write'
+          'Microsoft.Network/publicIPAddresses/join/action'
+          'Microsoft.Network/publicIPAddresses/delete'
+          'Microsoft.Resources/subscriptions/resourcegroups/read'
+          'Microsoft.Resources/subscriptions/resourcegroups/write'
+          'Microsoft.Resources/subscriptions/resourcegroups/delete'
+        ]
+      }
+    ]
+    assignableScopes: [
+      subscription().id
+    ]
+  }
+}
+
+>>>>>>>> develop:deployments/workspaces/platform/azure/resource-manager-template/arm-template.bicep
 output AdminUsername string = adminUsername
 output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
 output PublicHttpAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ httpPort }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
+<<<<<<<< HEAD:deployments/jupyter/platform/azure/resource-manager-template/arm-template.bicep
+========
+output PublicGrpcAccess string = 'http://${ publicIPAddress.properties.dnsSettings.fqdn }:${ grpcPort }'
+output PrivateGrpcAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ grpcPort }'
+>>>>>>>> develop:deployments/workspaces/platform/azure/resource-manager-template/arm-template.bicep
 output SecurityGroup string = networkSecurityGroup.id
 output sshCommand string = 'ssh ${adminUsername}@${publicIPAddress.properties.dnsSettings.fqdn}'

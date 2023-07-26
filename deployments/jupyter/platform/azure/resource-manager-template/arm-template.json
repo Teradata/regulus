@@ -5,7 +5,11 @@
     "_generator": {
       "name": "bicep",
       "version": "0.18.4.5664",
+<<<<<<<< HEAD:deployments/jupyter/platform/azure/resource-manager-template/arm-template.json
       "templateHash": "3802902211667631024"
+========
+      "templateHash": "12911493323856216175"
+>>>>>>>> develop:deployments/workspaces/platform/azure/resource-manager-template/arm-template.json
     }
   },
   "parameters": {
@@ -378,6 +382,17 @@
       "type": "string",
       "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress, parameters('httpPort'))]"
     },
+<<<<<<<< HEAD:deployments/jupyter/platform/azure/resource-manager-template/arm-template.json
+========
+    "PublicGrpcAccess": {
+      "type": "string",
+      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2021-05-01').dnsSettings.fqdn, parameters('grpcPort'))]"
+    },
+    "PrivateGrpcAccess": {
+      "type": "string",
+      "value": "[format('http://{0}:{1}', reference(resourceId('Microsoft.Network/networkInterfaces', variables('networkInterfaceName')), '2021-05-01').ipConfigurations[0].properties.privateIPAddress, parameters('grpcPort'))]"
+    },
+>>>>>>>> develop:deployments/workspaces/platform/azure/resource-manager-template/arm-template.json
     "SecurityGroup": {
       "type": "string",
       "value": "[resourceId('Microsoft.Network/networkSecurityGroups', parameters('networkSecurityGroupName'))]"
