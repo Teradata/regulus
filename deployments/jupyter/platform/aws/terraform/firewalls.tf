@@ -7,6 +7,7 @@ resource "aws_security_group" "this" {
     to_port     = 0
     protocol    = -1
     cidr_blocks = var.egress_cidrs
+    security_groups = var.access_security_groups
   }
 
   ingress {
@@ -25,15 +26,7 @@ resource "aws_security_group" "this" {
     security_groups = var.access_security_groups
   }
 
-  ingress {
-    from_port   = var.grpc_port
-    to_port     = var.grpc_port
-    protocol    = "tcp"
-    cidr_blocks = var.access_cidrs
-    security_groups = var.access_security_groups
-  }
-
   tags = {
-    Name = join("-", [var.workspaces_name, "access"])
+    Name = join("-", [var.jupyter_name, "access"])
   }
 }

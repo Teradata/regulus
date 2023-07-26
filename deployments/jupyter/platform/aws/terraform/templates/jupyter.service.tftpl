@@ -15,10 +15,9 @@ ExecStartPre=-/usr/bin/docker rm %n || true
 ExecStartPre=/usr/bin/docker pull ${ jupyter_registry }/${ jupyter_repository }:${ jupyter_version }
 
 ExecStart=/usr/bin/docker run \
-
     -e accept_license=Y \
     -e JUPYTER_TOKEN=${ jupyter_token } \
-    -v /etc/td:/etc/td \
+    -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \
     -p ${ http_port }:8888 \
     --rm --name %n ${ jupyter_registry }/${ jupyter_repository }:${ jupyter_version }
 

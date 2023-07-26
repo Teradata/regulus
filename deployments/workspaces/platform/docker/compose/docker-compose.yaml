@@ -4,15 +4,17 @@ services:
   workspaces:
     deploy:
       replicas: 1
+    platform: linux/amd64
     container_name: workspaces
-    image: ${WORKSPACES_IMAGE_NAME:-ghcr.io/teradata-tio/workspaces}:${WORKSPACES_IMAGE_TAG:-latest}
-    command: serve -v
+    image: ${WORKSPACES_IMAGE_NAME:-teradata/regulus-workspaces}:${WORKSPACES_IMAGE_TAG:-latest}
+    command: workspaces serve -v
     restart: unless-stopped
     ports:
       - "443:443/tcp"
       - "3000:3000/tcp"
       - "3282:3282/tcp"
     environment:
+      accept_license: "Y"
       TZ: ${WS_TZ:-UTC}
       AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
       AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
@@ -20,12 +22,14 @@ services:
     volumes:
       - ${WORKSPACES_HOME:-./volumes/workspaces}:/etc/td
       - ${WORKSPACES_AWS_CONFIG:-~/.aws}:/root/.aws
+      # - ${WS_HOME:-~/.azure:/root/.azure
   jupyter:
     deploy:
       replicas: 0
-    image: ${JUPYTER_IMAGE_NAME:-ghcr.io/teradata-tio/compute-engine-jupyter-kernel}:${JUPYTER_IMAGE_TAG:-latest}
+    platform: linux/amd64
+    image: ${JUPYTER_IMAGE_NAME:-teradata/regulus-jupyter}:${JUPYTER_IMAGE_TAG:-latest}
     environment:
-      - "accept_license=Y"
+      accept_license: "Y"
     ports:
       - 8888:8888
     volumes:

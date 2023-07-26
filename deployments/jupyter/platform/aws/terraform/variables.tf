@@ -11,18 +11,8 @@ variable "instance_type" {
   default = "t3.large"
 }
 
-variable "volume_size" {
-  type    = number
-  default = 20
-}
-
-variable "termination_protection" {
-  type    = bool
-  default = false
-}
-
 variable "key_name" {
-  description = "name of existing ssh key to enable access to workspaces server"
+  description = "name of existing ssh key to enable access to jupyter server"
   type        = string
   default     = null
 }
@@ -32,22 +22,22 @@ variable "tags" {
   default = {}
 }
 
-variable "workspaces_name" {
+variable "jupyter_name" {
   type    = string
-  default = "workspaces"
+  default = "jupyter"
 }
 
-variable "workspaces_registry" {
+variable "jupyter_registry" {
   type    = string
   default = "teradata"
 }
 
-variable "workspaces_repository" {
+variable "jupyter_repository" {
   type    = string
-  default = "regulus-workspaces"
+  default = "regulus-jupyter"
 }
 
-variable "workspaces_version" {
+variable "jupyter_version" {
   type    = string
   default = "latest"
 }
@@ -74,10 +64,5 @@ variable "monitoring_enabled" {
 
 variable "http_port" {
   type    = number
-  default = 3000
-}
-
-variable "grpc_port" {
-  type    = number
-  default = 3282
+  default = 8888
 }

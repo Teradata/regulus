@@ -1,0 +1,15 @@
+#cloud-config
+write_files:
+- encoding: b64
+  content: "${ jupyter_service }"
+  owner: root:root
+  path: /usr/lib/systemd/system/jupyter.service
+  permissions: '0640'
+
+runcmd:
+- amazon-linux-extras install docker -y
+- amazon-linux-extras enable docker
+- systemctl enable docker.service
+- systemctl start docker.service
+- systemctl enable jupyter.service
+- systemctl start jupyter.service
