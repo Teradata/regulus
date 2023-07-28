@@ -6,15 +6,9 @@ param resourceGroupName string = 'workspaces'
 @description('Name for the workspaces service virtual machine.')
 param workspacesName string
 
-@description('Username for the workspaces service virtual machine.')
-param adminUsername string = 'azureuser'
-
 @description('SSH public key value')
 @secure()
 param sshPublicKey string
-
-@description('Unique DNS Name prefix for the Public IP used to access the Virtual Machine.')
-param dnsLabelPrefix string
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
 @allowed([
@@ -49,7 +43,7 @@ param grpcPort string = '3282'
 param roleDefinitionId string
 
 @description('allow access the workspaces ssh port from the access cidr.')
-param sshAccess bool = false
+param sshAccess bool = true
 
 var roleAssignmentName = guid(subscription().id, workspacesName, rg.id , roleDefinitionId)
 
@@ -86,9 +80,9 @@ module workspaces 'modules/instance.bicep' = {
   params: {
     location: rg.location
     name: workspacesName
-    adminUsername: adminUsername
+    adminUsername: 'azureuser'
     sshPublicKey: sshPublicKey
-    dnsLabelPrefix: dnsLabelPrefix
+    dnsLabelPrefix: uniqueString(rg.id, deployment().name, workspacesName)
     vmSize: vmSize
     subnetId: subnet.id
     networkSecurityGroupID: firewall.outputs.Id
@@ -107,7 +101,6 @@ resource roleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-output AdminUsername string = adminUsername
 output PublicIP string = workspaces.outputs.PublicIP
 output PrivateIP string = workspaces.outputs.PrivateIP
 output PublicHttpAccess string = 'http://${ workspaces.outputs.PublicIP }:${ httpPort }'
@@ -115,4 +108,4 @@ output PrivateHttpAccess string = 'http://${ workspaces.outputs.PrivateIP }:${ h
 output PublicGrpcAccess string = 'http://${ workspaces.outputs.PublicIP }:${ grpcPort }'
 output PrivateGrpcAccess string = 'http://${ workspaces.outputs.PrivateIP }:${ grpcPort }'
 output SecurityGroup string = firewall.outputs.Id
-output sshCommand string = 'ssh ${adminUsername}@${workspaces.outputs.PublicIP}'
+output sshCommand string = 'ssh azureuser@${workspaces.outputs.PublicIP}'

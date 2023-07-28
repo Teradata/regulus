@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.19.5.34762",
-      "templateHash": "7092073020554134098"
+      "templateHash": "8057482723144473764"
     }
   },
   "parameters": {
@@ -14,13 +14,6 @@
       "defaultValue": "jupyter",
       "metadata": {
         "description": "Name for the jupyter service virtual machine."
-      }
-    },
-    "adminUsername": {
-      "type": "string",
-      "defaultValue": "azureuser",
-      "metadata": {
-        "description": "Username for the jupyter service virtual machine."
       }
     },
     "sshPublicKey": {
@@ -33,12 +26,6 @@
       "type": "securestring",
       "metadata": {
         "description": "jupyter token value"
-      }
-    },
-    "dnsLabelPrefix": {
-      "type": "string",
-      "metadata": {
-        "description": "Unique DNS Name for the Public IP used to access the Virtual Machine."
       }
     },
     "ubuntuOSVersion": {
@@ -90,7 +77,7 @@
     },
     "sshAccess": {
       "type": "bool",
-      "defaultValue": false,
+      "defaultValue": true,
       "metadata": {
         "description": "allow access the jupyter ssh port from the access cidr."
       }
@@ -128,7 +115,7 @@
       "ssh": {
         "publicKeys": [
           {
-            "path": "[format('/home/{0}/.ssh/authorized_keys', parameters('adminUsername'))]",
+            "path": "/home/azureuser/.ssh/authorized_keys",
             "keyData": "[parameters('sshPublicKey')]"
           }
         ]
@@ -225,7 +212,7 @@
         "publicIPAllocationMethod": "Static",
         "publicIPAddressVersion": "IPv4",
         "dnsSettings": {
-          "domainNameLabel": "[parameters('dnsLabelPrefix')]"
+          "domainNameLabel": "[uniqueString(resourceGroup().id, deployment().name, parameters('jupyterName'))]"
         },
         "idleTimeoutInMinutes": 4
       }
@@ -260,7 +247,7 @@
         },
         "osProfile": {
           "computerName": "[parameters('jupyterName')]",
-          "adminUsername": "[parameters('adminUsername')]",
+          "adminUsername": "azureuser",
           "linuxConfiguration": "[variables('linuxConfiguration')]"
         },
         "securityProfile": {
@@ -316,10 +303,6 @@
     }
   ],
   "outputs": {
-    "AdminUsername": {
-      "type": "string",
-      "value": "[parameters('adminUsername')]"
-    },
     "PublicIP": {
       "type": "string",
       "value": "[reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').ipAddress]"
@@ -338,7 +321,7 @@
     },
     "sshCommand": {
       "type": "string",
-      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').ipAddress)]"
+      "value": "[format('ssh azureuser@{0}', reference(resourceId('Microsoft.Network/publicIPAddresses', variables('publicIPAddressName')), '2022-11-01').ipAddress)]"
     }
   }
 }

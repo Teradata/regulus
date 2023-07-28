@@ -1,9 +1,6 @@
 @description('Name for the jupyter service virtual machine.')
 param jupyterName string = 'jupyter'
 
-@description('Username for the jupyter service virtual machine.')
-param adminUsername string = 'azureuser'
-
 @description('SSH public key value')
 @secure()
 param sshPublicKey string
@@ -11,9 +8,6 @@ param sshPublicKey string
 @description('jupyter token value')
 @secure()
 param jupyterToken string
-
-@description('Unique DNS Name for the Public IP used to access the Virtual Machine.')
-param dnsLabelPrefix string
 
 @description('The Ubuntu version for the VM. This will pick a fully patched image of this given Ubuntu version.')
 @allowed([
@@ -39,7 +33,7 @@ param accessCidrs array = ['0.0.0.0/0']
 param httpPort string = '8888'
 
 @description('allow access the jupyter ssh port from the access cidr.')
-param sshAccess bool = false
+param sshAccess bool = true
 
 var imageReference = {
   'Ubuntu-1804': {
@@ -71,7 +65,7 @@ var linuxConfiguration = {
   ssh: {
     publicKeys: [
       {
-        path: '/home/${adminUsername}/.ssh/authorized_keys'
+        path: '/home/azureuser/.ssh/authorized_keys'
         keyData: sshPublicKey
       }
     ]
@@ -184,7 +178,7 @@ resource publicIPAddress 'Microsoft.Network/publicIPAddresses@2022-11-01' = {
     publicIPAllocationMethod: 'Static'
     publicIPAddressVersion: 'IPv4'
     dnsSettings: {
-      domainNameLabel: dnsLabelPrefix
+      domainNameLabel: uniqueString(resourceGroup().id, deployment().name, jupyterName)
     }
     idleTimeoutInMinutes: 4
   }
@@ -219,7 +213,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
     
     osProfile: {
       computerName: jupyterName
-      adminUsername: adminUsername
+      adminUsername: 'azureuser'
       linuxConfiguration: linuxConfiguration
     }
     securityProfile: {
@@ -232,8 +226,6 @@ resource vm 'Microsoft.Compute/virtualMachines@2023-03-01' = {
     userData: cloudInitData
   }
 }
-
-
 
 resource jupyterName_extension_trusted 'Microsoft.Compute/virtualMachines/extensions@2023-03-01' = {
   parent: vm
@@ -267,9 +259,8 @@ resource jupyterName_extension_docker 'Microsoft.Compute/virtualMachines/extensi
   }
 }
 
-output AdminUsername string = adminUsername
 output PublicIP string = publicIPAddress.properties.ipAddress
 output PrivateIP string = networkInterface.properties.ipConfigurations[0].properties.privateIPAddress
 output PublicHttpAccess string = 'http://${ publicIPAddress.properties.ipAddress }:${ httpPort }?token=${ jupyterToken }'
 output PrivateHttpAccess string = 'http://${ networkInterface.properties.ipConfigurations[0].properties.privateIPAddress }:${ httpPort }'
-output sshCommand string = 'ssh ${ adminUsername }@${ publicIPAddress.properties.ipAddress }'
+output sshCommand string = 'ssh azureuser@${ publicIPAddress.properties.ipAddress }'

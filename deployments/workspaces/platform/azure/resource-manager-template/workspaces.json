@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.19.5.34762",
-      "templateHash": "9757645992240537018"
+      "templateHash": "14046490903058416348"
     }
   },
   "parameters": {
@@ -22,23 +22,10 @@
         "description": "Name for the workspaces service virtual machine."
       }
     },
-    "adminUsername": {
-      "type": "string",
-      "defaultValue": "azureuser",
-      "metadata": {
-        "description": "Username for the workspaces service virtual machine."
-      }
-    },
     "sshPublicKey": {
       "type": "securestring",
       "metadata": {
         "description": "SSH public key value"
-      }
-    },
-    "dnsLabelPrefix": {
-      "type": "string",
-      "metadata": {
-        "description": "Unique DNS Name prefix for the Public IP used to access the Virtual Machine."
       }
     },
     "ubuntuOSVersion": {
@@ -110,7 +97,7 @@
     },
     "sshAccess": {
       "type": "bool",
-      "defaultValue": false,
+      "defaultValue": true,
       "metadata": {
         "description": "allow access the workspaces ssh port from the access cidr."
       }
@@ -270,13 +257,13 @@
             "value": "[parameters('workspacesName')]"
           },
           "adminUsername": {
-            "value": "[parameters('adminUsername')]"
+            "value": "azureuser"
           },
           "sshPublicKey": {
             "value": "[parameters('sshPublicKey')]"
           },
           "dnsLabelPrefix": {
-            "value": "[parameters('dnsLabelPrefix')]"
+            "value": "[uniqueString(subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName')), deployment().name, parameters('workspacesName'))]"
           },
           "vmSize": {
             "value": "[parameters('vmSize')]"
@@ -546,10 +533,6 @@
     }
   ],
   "outputs": {
-    "AdminUsername": {
-      "type": "string",
-      "value": "[parameters('adminUsername')]"
-    },
     "PublicIP": {
       "type": "string",
       "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'workspaces'), '2022-09-01').outputs.PublicIP.value]"
@@ -580,7 +563,7 @@
     },
     "sshCommand": {
       "type": "string",
-      "value": "[format('ssh {0}@{1}', parameters('adminUsername'), reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'workspaces'), '2022-09-01').outputs.PublicIP.value)]"
+      "value": "[format('ssh azureuser@{0}', reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'workspaces'), '2022-09-01').outputs.PublicIP.value)]"
     }
   }
 }
