@@ -66,4 +66,5 @@ No modules.
 | <a name="output_public_http_access_workspaces"></a> [public\_http\_access\_workspaces](#output\_public\_http\_access\_workspaces) | n/a |
 | <a name="output_public_ip_workspaces"></a> [public\_ip\_workspaces](#output\_public\_ip\_workspaces) | n/a |
 | <a name="output_security_group"></a> [security\_group](#output\_security\_group) | n/a |
+| <a name="output_ssh_connection"></a> [ssh\_connection](#output\_ssh\_connection) | n/a |
 <!-- END_TF_DOCS -->

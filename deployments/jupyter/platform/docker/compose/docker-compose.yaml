@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  jupyter:
+    deploy:
+      replicas: 1
+    platform: linux/amd64
+    image: ${JUPYTER_IMAGE_NAME:-teradata/regulus-jupyter}:${JUPYTER_IMAGE_TAG:-latest}
+    environment:
+      accept_license: "Y"
+    ports:
+      - 8888:8888
+    volumes:
+      - ${JUPYTER_HOME:-./volumes/jupyter}:/home/jovyan/JupyterLabRoot/userdata

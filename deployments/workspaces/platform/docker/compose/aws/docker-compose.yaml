@@ -16,13 +16,12 @@ services:
     environment:
       accept_license: "Y"
       TZ: ${WS_TZ:-UTC}
-      AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
-      AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
-      AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
+        AWS_ACCESS_KEY_ID: "${AWS_ACCESS_KEY_ID}"
+        AWS_SECRET_ACCESS_KEY: "${AWS_SECRET_ACCESS_KEY}"
+        AWS_SESSION_TOKEN: "${AWS_SESSION_TOKEN}"
     volumes:
       - ${WORKSPACES_HOME:-./volumes/workspaces}:/etc/td
-      - ${WORKSPACES_AWS_CONFIG:-~/.aws}:/root/.aws
-      # - ${WS_HOME:-~/.azure:/root/.azure
+        ${WORKSPACES_AWS_CONFIG:-~/.aws}:/root/.aws
   jupyter:
     deploy:
       replicas: 0

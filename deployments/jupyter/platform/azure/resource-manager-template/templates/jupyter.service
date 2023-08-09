@@ -16,7 +16,7 @@ ExecStartPre=/usr/bin/docker pull {0}/{1}:{2}
 
 ExecStart=/usr/bin/docker run \
     -e accept_license=Y \
-    -e JUPYTER_TOKEN=${4} \
+    -e JUPYTER_TOKEN={4} \
     -v /etc/td:/home/jovyan/JupyterLabRoot/userdata \
     -p {3}:8888 \
     --rm --name %n {0}/{1}:{2}
