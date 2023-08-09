@@ -15,6 +15,7 @@ Metadata:
       - Label:
           default: "jupyter connection"
         Parameters:
+          - Private
           - Vpc
           - Subnet
           - KeyName
@@ -37,6 +38,14 @@ Parameters:
     MaxLength: '32'
     MinLength: '1'
     Type: String
+
+  Private:
+    Description: Will Jupyter be deployed in a private netowrk without public IPs?
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
 
   Vpc:
     ConstraintDescription: must be the name of an existing vpc.
@@ -153,6 +162,9 @@ Rules:
 
 Conditions:
 
+  HASPUBLICIP:
+    !Not [ !Equals [ !Ref Private, 'true' ] ]
+
   HASKEY:
     !Not [ !Equals [ !Ref KeyName, '' ] ]
 
@@ -162,6 +174,10 @@ Conditions:
   HASKEYANDCIDR: !And
     - !Condition HASKEY
     - !Condition HASCIDR
+
+  HASKEYANDPUBLIC: !And
+    - !Condition HASKEY
+    - !Condition HASPUBLICIP
 
 Resources:
 
@@ -275,20 +291,33 @@ Resources:
 
 Outputs:
   PublicIP:
+    Condition: HASPUBLICIP 
     Description: EC2 public IP
     Value: !GetAtt jupyterServer.PublicIp
+
   PrivateIP:
     Description: EC2 private IP
     Value: !GetAtt jupyterServer.PrivateIp
+
   PublicHttpAccess:
+    Condition: HASPUBLICIP 
     Description: Teradata jupyter Server
     Value: !Sub "http://${jupyterServer.PublicDnsName}:${ HttpPort }?token=${ JupyterToken }"
+
   PrivateHttpAccess:
     Description: Teradata jupyter Server
     Value: !Sub "http://${jupyterServer.PrivateDnsName}:${ HttpPort }?token=${ JupyterToken }"
+
   SecurityGroup:
     Description: jupyter Security Group
     Value: !GetAtt jupyterSecurityGroup.GroupId
-  SSHConeection:
+
+  PublicSSHConeection:
+    Condition: HASKEYANDPUBLIC
     Description: jupyter ssh connnection string
     Value: !Sub "ssh ec2-user@${ jupyterServer.PublicIp }"
+
+  PrivateSSHConeection:
+    Condition: HASKEY
+    Description: jupyter ssh connnection string
+    Value: !Sub "ssh ec2-user@${ jupyterServer.PrivateIp }"
