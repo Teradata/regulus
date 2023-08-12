@@ -15,6 +15,7 @@ Metadata:
           default: "Workspaces connection"
         Parameters:
           - Private
+          - Session
           - Vpc
           - Subnet
           - KeyName
@@ -41,7 +42,15 @@ Parameters:
     Type: String
 
   Private:
-    Description: Will Jupyter be deployed in a private netowrk without public IPs?
+    Description: Will Workspaces be deployed in a private netowrk without public IPs?
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  Session:
+    Description: Should Workspaces be accessible via AWS Session Manager?
     Type: String
     Default: false
     AllowedValues:
@@ -50,12 +59,12 @@ Parameters:
 
   Vpc:
     ConstraintDescription: must be the name of an existing vpc.
-    Description: Network to deploy the jupyter service to.
+    Description: Network to deploy the Workspaces service to.
     Type: AWS::EC2::VPC::Id
 
   Subnet:
     ConstraintDescription: must be the name of an existing subnet.
-    Description: Subnetwork to deploy the jupyter service to.
+    Description: Subnetwork to deploy the Workspaces service to.
     Type: AWS::EC2::Subnet::Id
 
   HttpPort:
@@ -175,9 +184,16 @@ Conditions:
   HASCIDR:
     !Not [ !Equals [!Ref AccessCIDR, '' ] ]
 
+  USESESSIONMANAGER:
+    !Equals [ !Ref Session, 'true' ]
+
   HASKEYANDCIDR: !And
     - !Condition HASKEY
     - !Condition HASCIDR
+
+  HASKEYANDPUBLIC: !And
+    - !Condition HASKEY
+    - !Condition HASPUBLICIP
 
 Resources:
 
@@ -308,6 +324,50 @@ Resources:
           Action:
           - sts:AssumeRole
       Path: "/"
+
+  SessionManagerPolicies:
+    Condition: USESESSIONMANAGER
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WorkspacesSessionManagerPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: 
+          - "ssm:DescribeAssociation"
+          - "ssm:GetDeployablePatchSnapshotForInstance"
+          - "ssm:GetDocument"
+          - "ssm:DescribeDocument"
+          - "ssm:GetManifest"
+          - "ssm:ListAssociations"
+          - "ssm:ListInstanceAssociations"
+          - "ssm:PutInventory"
+          - "ssm:PutComplianceItems"
+          - "ssm:PutConfigurePackageResult"
+          - "ssm:UpdateAssociationStatus"
+          - "ssm:UpdateInstanceAssociationStatus"
+          - "ssm:UpdateInstanceInformation"
+          Resource: "*"
+        - Effect: Allow
+          Action: 
+          - "ssmmessages:CreateControlChannel"
+          - "ssmmessages:CreateDataChannel"
+          - "ssmmessages:OpenControlChannel"
+          - "ssmmessages:OpenDataChannel"
+          Resource: "*"
+        - Effect: Allow
+          Action: 
+          - "ec2messages:AcknowledgeMessage"
+          - "ec2messages:DeleteMessage"
+          - "ec2messages:FailMessage"
+          - "ec2messages:GetEndpoint"
+          - "ec2messages:GetMessages"
+          - "ec2messages:SendReply"
+          Resource: "*"
+      Roles:
+      - !Ref WorkspacesRole
+
   WorkspacesRolePolicies:
     Type: AWS::IAM::Policy
     Properties:
@@ -393,15 +453,15 @@ Outputs:
   PublicHttpAccess:
     Condition: HASPUBLICIP 
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }?token=${ JupyterToken }"
+    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }"
 
   PrivateHttpAccess:
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }?token=${ JupyterToken }"
+    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }"
 
   SecurityGroup:
     Description: Workspaces Security Group
-    Value: !GetAtt WorkspacesServer.GroupId
+    Value: !GetAtt WorkspacesSecurityGroup.GroupId
 
   PublicSSHConeection:
     Condition: HASKEYANDPUBLIC
