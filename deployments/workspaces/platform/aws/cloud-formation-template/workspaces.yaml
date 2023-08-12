@@ -14,6 +14,7 @@ Metadata:
       - Label:
           default: "Workspaces connection"
         Parameters:
+          - Private
           - Vpc
           - Subnet
           - KeyName
@@ -38,6 +39,14 @@ Parameters:
     MaxLength: '32'
     MinLength: '1'
     Type: String
+
+  Private:
+    Description: Will Jupyter be deployed in a private netowrk without public IPs?
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
 
   Vpc:
     ConstraintDescription: must be the name of an existing vpc.
@@ -156,6 +165,9 @@ Rules:
         AssertDescription: The subnet you selected is not in the VPC
 
 Conditions:
+
+  HASPUBLICIP:
+    !Not [ !Equals [ !Ref Private, 'true' ] ]
 
   HASKEY:
     !Not [ !Equals [ !Ref KeyName, '' ] ]
@@ -370,20 +382,33 @@ Resources:
 
 Outputs:
   PublicIP:
+    Condition: HASPUBLICIP 
     Description: EC2 public IP
     Value: !GetAtt WorkspacesServer.PublicIp
+
   PrivateIP:
     Description: EC2 private IP
     Value: !GetAtt WorkspacesServer.PrivateIp
+
   PublicHttpAccess:
+    Condition: HASPUBLICIP 
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }"
+    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }?token=${ JupyterToken }"
+
   PrivateHttpAccess:
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }"
+    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }?token=${ JupyterToken }"
+
   SecurityGroup:
     Description: Workspaces Security Group
-    Value: !GetAtt WorkspacesSecurityGroup.GroupId
-  SSHConeection:
+    Value: !GetAtt WorkspacesServer.GroupId
+
+  PublicSSHConeection:
+    Condition: HASKEYANDPUBLIC
     Description: Workspaces ssh connnection string
     Value: !Sub "ssh ec2-user@${ WorkspacesServer.PublicIp }"
+
+  PrivateSSHConeection:
+    Condition: HASKEY
+    Description: Workspaces ssh connnection string
+    Value: !Sub "ssh ec2-user@${ WorkspacesServer.PrivateIp }"
