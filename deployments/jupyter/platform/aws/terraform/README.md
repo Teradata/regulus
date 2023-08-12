@@ -48,6 +48,7 @@ No modules.
 | <a name="input_region"></a> [region](#input\_region) | n/a | `string` | n/a | yes |
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | n/a | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
+| <a name="input_user_tags"></a> [user\_tags](#input\_user\_tags) | n/a | `map(string)` | `{}` | no |
 
 ## Outputs
 
