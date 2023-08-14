@@ -81,3 +81,8 @@ variable "grpc_port" {
   type    = number
   default = 3282
 }
+
+variable "user_tags" {
+  type    = map(string)
+  default = {}
+}

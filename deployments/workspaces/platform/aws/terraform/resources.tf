@@ -54,8 +54,22 @@ resource "aws_instance" "this" {
     encrypted             = true
   }
 
-  tags = {
-  Name = join("-", [var.workspaces_name, "workspaces"]) }
+  tags = merge(
+    var.user_tags,
+    { 
+      Name = join("-", [var.workspaces_name, "workspaces"])
+    }
+  )
+
+  tag_specifications {
+    resource_type = "volume"
+    tags          = merge(
+      var.user_tags,
+      { 
+        Name = join("-", [var.workspaces_name, "workspaces"])
+      }
+    )
+  }
 
   disable_api_termination = var.termination_protection
 

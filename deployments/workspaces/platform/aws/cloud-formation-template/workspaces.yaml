@@ -11,10 +11,12 @@ Metadata:
           - InstanceType
           - VolumeSize
           - TerminationProtection
+          - IamRole
       - Label:
           default: "Workspaces connection"
         Parameters:
           - Private
+          - Session
           - Vpc
           - Subnet
           - KeyName
@@ -41,7 +43,15 @@ Parameters:
     Type: String
 
   Private:
-    Description: Will Jupyter be deployed in a private netowrk without public IPs?
+    Description: Will Workspaces be deployed in a private netowrk without public IPs?
+    Type: String
+    Default: false
+    AllowedValues:
+      - true
+      - false
+
+  Session:
+    Description: Should Workspaces be accessible via AWS Session Manager?
     Type: String
     Default: false
     AllowedValues:
@@ -50,12 +60,12 @@ Parameters:
 
   Vpc:
     ConstraintDescription: must be the name of an existing vpc.
-    Description: Network to deploy the jupyter service to.
+    Description: Network to deploy the Workspaces service to.
     Type: AWS::EC2::VPC::Id
 
   Subnet:
     ConstraintDescription: must be the name of an existing subnet.
-    Description: Subnetwork to deploy the jupyter service to.
+    Description: Subnetwork to deploy the Workspaces service to.
     Type: AWS::EC2::Subnet::Id
 
   HttpPort:
@@ -144,6 +154,10 @@ Parameters:
     Description: Name of an existing EC2 KeyPair to enable SSH access to the instances, leave empty if no ssh keys should be included
     Type: String
 
+  IamRole:
+    Description: Name of an existing IAM Role to assign to Workspaces, leave empty to automatically create a compatible role.
+    Type: String
+
   AccessCIDR:
     AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})
     ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
@@ -166,6 +180,9 @@ Rules:
 
 Conditions:
 
+  NEEDSROLE:
+    !Equals [!Ref IamRole, '' ]
+
   HASPUBLICIP:
     !Not [ !Equals [ !Ref Private, 'true' ] ]
 
@@ -175,9 +192,20 @@ Conditions:
   HASCIDR:
     !Not [ !Equals [!Ref AccessCIDR, '' ] ]
 
+  USESESSIONMANAGER:
+    !Equals [ !Ref Session, 'true' ]
+
+  NEEDSROLEANDSESSIONMANAGER: !And
+    - !Condition NEEDSROLE
+    - !Condition USESESSIONMANAGER
+
   HASKEYANDCIDR: !And
     - !Condition HASKEY
     - !Condition HASCIDR
+
+  HASKEYANDPUBLIC: !And
+    - !Condition HASKEY
+    - !Condition HASPUBLICIP
 
 Resources:
 
@@ -296,6 +324,7 @@ Resources:
       ToPort: 22
 
   WorkspacesRole:
+    Condition: NEEDSROLE
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -308,7 +337,52 @@ Resources:
           Action:
           - sts:AssumeRole
       Path: "/"
+
+  SessionManagerPolicies:
+    Condition: NEEDSROLEANDSESSIONMANAGER
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: WorkspacesSessionManagerPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: 
+          - "ssm:DescribeAssociation"
+          - "ssm:GetDeployablePatchSnapshotForInstance"
+          - "ssm:GetDocument"
+          - "ssm:DescribeDocument"
+          - "ssm:GetManifest"
+          - "ssm:ListAssociations"
+          - "ssm:ListInstanceAssociations"
+          - "ssm:PutInventory"
+          - "ssm:PutComplianceItems"
+          - "ssm:PutConfigurePackageResult"
+          - "ssm:UpdateAssociationStatus"
+          - "ssm:UpdateInstanceAssociationStatus"
+          - "ssm:UpdateInstanceInformation"
+          Resource: "*"
+        - Effect: Allow
+          Action: 
+          - "ssmmessages:CreateControlChannel"
+          - "ssmmessages:CreateDataChannel"
+          - "ssmmessages:OpenControlChannel"
+          - "ssmmessages:OpenDataChannel"
+          Resource: "*"
+        - Effect: Allow
+          Action: 
+          - "ec2messages:AcknowledgeMessage"
+          - "ec2messages:DeleteMessage"
+          - "ec2messages:FailMessage"
+          - "ec2messages:GetEndpoint"
+          - "ec2messages:GetMessages"
+          - "ec2messages:SendReply"
+          Resource: "*"
+      Roles:
+      - !Ref WorkspacesRole
+
   WorkspacesRolePolicies:
+    Condition: NEEDSROLE
     Type: AWS::IAM::Policy
     Properties:
       PolicyName: WorkspacesPolicy
@@ -378,7 +452,10 @@ Resources:
     Properties:
       Path: "/"
       Roles:
-      - !Ref WorkspacesRole
+        Fn::If:
+        - NEEDSROLE
+        - [ Ref: WorkspacesRole ]
+        - [ Ref: IamRole ]
 
 Outputs:
   PublicIP:
@@ -393,15 +470,15 @@ Outputs:
   PublicHttpAccess:
     Condition: HASPUBLICIP 
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }?token=${ JupyterToken }"
+    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ HttpPort }"
 
   PrivateHttpAccess:
     Description: Teradata Workspaces Server
-    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }?token=${ JupyterToken }"
+    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ HttpPort }"
 
   SecurityGroup:
     Description: Workspaces Security Group
-    Value: !GetAtt WorkspacesServer.GroupId
+    Value: !GetAtt WorkspacesSecurityGroup.GroupId
 
   PublicSSHConeection:
     Condition: HASKEYANDPUBLIC

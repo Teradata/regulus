@@ -66,3 +66,8 @@ variable "http_port" {
   type    = number
   default = 8888
 }
+
+variable "user_tags" {
+  type    = map(string)
+  default = {}
+}
