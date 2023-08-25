@@ -49,6 +49,7 @@ No modules.
 | <a name="input_subnet_id"></a> [subnet\_id](#input\_subnet\_id) | n/a | `string` | n/a | yes |
 | <a name="input_tags"></a> [tags](#input\_tags) | n/a | `map(string)` | `{}` | no |
 | <a name="input_termination_protection"></a> [termination\_protection](#input\_termination\_protection) | n/a | `bool` | `false` | no |
+| <a name="input_user_tags"></a> [user\_tags](#input\_user\_tags) | n/a | `map(string)` | `{}` | no |
 | <a name="input_volume_size"></a> [volume\_size](#input\_volume\_size) | n/a | `number` | `20` | no |
 | <a name="input_workspaces_name"></a> [workspaces\_name](#input\_workspaces\_name) | n/a | `string` | `"workspaces"` | no |
 | <a name="input_workspaces_registry"></a> [workspaces\_registry](#input\_workspaces\_registry) | n/a | `string` | `"teradata"` | no |
