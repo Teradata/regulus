@@ -203,6 +203,22 @@ If passing the Regulus Role to new regulus clusters instead of allowing workspac
 the following policy can be used as a starting point to template your desired policy.
 ## [regulus.json](regulus.json)
 
+```
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": "secretsmanager:GetSecretValue",
+      "Effect": "Allow",
+      "Resource": [
+        "arn:aws:secretsmanager:<REGION>:<ACCOUNT_ID>:secret:compute-engine/*"
+      ]
+    }
+  ]
+}
+
+```
+
 Note, when workspaces creates policies for regulus, they are restricted to the form of
 ```
 "Resource": [ "arn:aws:secretsmanager:<REGULUS_REGION>:<REGULUS_ACCOUNT_ID>:secret:compute-engine/<REGULUS_CLUSTER_NAME>/<SECRET_NAME>"]
