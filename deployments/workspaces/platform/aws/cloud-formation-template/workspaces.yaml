@@ -25,10 +25,14 @@ Metadata:
 
 Description: >-
   AWS CloudFormation Template Workspaces: Workspaces is a instance based service for deploying
-  and spending regulus clusters, and managing project lifecycles.You will be billed for the AWS
-  resources used if you create a stack from this template.
+  and spending regulus clusters, and managing project lifecycles. 
+  You will be billed for the AWS resources used if you create a stack from this template.
 
 Parameters:
+
+  LatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
   WorkspacesName:
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*'
@@ -39,10 +43,6 @@ Parameters:
     MaxLength: '20'
     MinLength: '1'
     Type: String
-
-  LatestAmiId:
-    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
-    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
 
   Private:
     Description: Will Workspaces be deployed in a private netowrk without public IPs?
@@ -58,11 +58,11 @@ Parameters:
       This Load balancer in intended to provide TLS termination and access to private networks,
       not to add multiple workspaces instance for workload distribution.
     Type: String
-    Default: None
+    Default: NetworkLoadBalancer
     AllowedValues:
       - None
-      - ApplicationLoadBalancer
       - NetworkLoadBalancer
+      # - ApplicationLoadBalancer
 
   Session:
     Description: Should Workspaces be accessible via AWS Session Manager?
@@ -331,8 +331,39 @@ Resources:
            /opt/aws/bin/cfn-signal -e $? --stack ${AWS::StackId} --resource WorkspacesServer --region ${AWS::Region}
 
 # TODO: ADD CERT WORK FOR ALB
-#  DNSRecord
-#  ACMCertificate
+  # DNSRecord:
+  #   Type: AWS::Route53::RecordSet
+  #   Properties: 
+  #     AliasTarget: 
+  #       AliasTarget
+  #     CidrRoutingConfig: 
+  #       CidrRoutingConfig
+  #     Comment: String
+  #     Failover: String
+  #     GeoLocation: 
+  #       GeoLocation
+  #     HealthCheckId: String
+  #     HostedZoneId: # var lookup
+  #     HostedZoneName: String
+  #     MultiValueAnswer: Boolean
+  #     Name: String
+  #     Region: String
+  #     ResourceRecords: 
+  #       - String
+  #     SetIdentifier: String
+  #     TTL: String
+  #     Type: String
+  #     Weight: Integer
+
+  # ACMCertificate:
+  #   Type: "AWS: :CertificateManager: :Certificate"
+  #   Properties:
+  #     DomainName: example.com
+  #     CertificateTransparencyLoggingPreference: DISABLED
+  #     DomainValidationOptions:
+  #       - DomainName: www.example.com
+  #         HostedZoneId:  # attr lookup DNS record
+  #     ValidationMethod: DNS
 
   LoadBalancerSecurityGroup:
     Condition: HASCIDRANDLB
@@ -505,7 +536,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       VpcId: !Ref Vpc
-      GroupDescription: "Enable access to workspaces server over http, grpc, and ssh"
+      GroupDescription: "Enable access to workspaces server over http and grpc"
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: !Ref HttpPort
@@ -672,6 +703,7 @@ Resources:
           Resource: "*"
       Roles:
       - !Ref WorkspacesRole
+
   WorkspacesInstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
@@ -692,15 +724,15 @@ Outputs:
     Description: EC2 private IP
     Value: !GetAtt WorkspacesServer.PrivateIp
 
-  LoadBalancerAccess:
+  LoadBalancerUIAccess:
     Condition: HASLB
     Description: Loadbalancer access endpoint for UI Access
-    Value: !Sub "${ LoadBalancer.DNSName }:{ HttpPort }"
+    Value: !Sub "${ LoadBalancer.DNSName }:${ HttpPort }"
 
-  LoadBalancerAccess:
+  LoadBalancerAPIAccess:
     Condition: HASLB
     Description: Loadbalancer access endpoint for API Access
-    Value: !Sub "${ LoadBalancer.DNSName }:{ GrpcPort }"
+    Value: !Sub "${ LoadBalancer.DNSName }:${ GrpcPort }"
 
   PublicHttpAccess:
     Condition: HASPUBLICIP 
