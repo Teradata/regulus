@@ -545,7 +545,7 @@ Outputs:
   LoadBalancerUIAccess:
     Condition: HASLB
     Description: Loadbalancer access endpoint for UI Access
-    Value: !Sub "${ LoadBalancer.DNSName }:${ HttpPort }"
+    Value: !Sub "${ LoadBalancer.DNSName }:${ HttpPort }?token=${ JupyterToken }"
 
   PublicHttpAccess:
     Condition: HASPUBLICIP 
