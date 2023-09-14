@@ -11,6 +11,7 @@ Metadata:
           - InstanceType
           - VolumeSize
           - TerminationProtection
+          - JupyterToken
           - IamRole
       - Label:
           default: "Jupyter connection"
@@ -18,6 +19,7 @@ Metadata:
           - AvailabilityZone
           - LoadBalancing
           - LoadBalancerScheme
+          - LoadBalancing
           - Private
           - Session
           - Vpc
@@ -460,7 +462,7 @@ Resources:
           Ebs:
             VolumeSize: !Ref RootVolumeSize
             Encrypted: true
-      SubnetId: !Ref Subnet
+      SubnetId: !Select [ 0, !Ref Subnets ]
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName:
