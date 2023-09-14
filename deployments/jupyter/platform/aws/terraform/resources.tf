@@ -53,16 +53,16 @@ resource "aws_instance" "this" {
 
   tags = merge(
     var.user_tags,
-    { 
+    {
       Name = join("-", [jupyter_name, "jupyter"])
     }
   )
 
   tag_specifications {
     resource_type = "volume"
-    tags          = merge(
+    tags = merge(
       var.user_tags,
-      { 
+      {
         Name = join("-", [jupyter_name, "jupyter"])
       }
     )

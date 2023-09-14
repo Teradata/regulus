@@ -68,7 +68,7 @@ variable "access_security_groups" {
 }
 
 variable "monitoring_enabled" {
-  type = bool 
+  type    = bool
   default = false
 }
 

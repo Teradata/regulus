@@ -462,7 +462,7 @@ Resources:
           Ebs:
             VolumeSize: !Ref RootVolumeSize
             Encrypted: true
-      SubnetId: !Select [ 0, !Ref Subnets ]
+      SubnetId: !Ref Subnet
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName:
