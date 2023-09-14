@@ -54,7 +54,7 @@ variable "ssh_enabled" {
 }
 
 variable "access_cidrs" {
-  type    = list(string)
+  type = list(string)
 }
 
 variable "egress_cidrs" {

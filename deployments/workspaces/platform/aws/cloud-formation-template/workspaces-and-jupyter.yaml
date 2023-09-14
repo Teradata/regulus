@@ -621,7 +621,7 @@ Resources:
     Properties:
       DefaultActions:
         - Type: forward
-          TargetGroupArn: 
+          TargetGroupArn:
             Fn::If:
               - HASALB
               - !Ref WorkspacesALBGRPCTargetGroup

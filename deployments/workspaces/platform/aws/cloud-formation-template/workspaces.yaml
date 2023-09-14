@@ -455,7 +455,7 @@ Resources:
           Ebs:
             VolumeSize: !Ref RootVolumeSize
             Encrypted: true
-      SubnetId: !Select [ 0, !Ref Subnets ]
+      SubnetId: !Ref Subnet
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName:
@@ -693,10 +693,11 @@ Resources:
               - !Ref AccessCIDR
 
   LoadBalancer:
+    Condition: HASLB
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Scheme: internet-facing
-      Subnets: !Ref Subnets 
+      Subnets: [ !Ref Subnet ]
       SecurityGroups:
         - !GetAtt LoadBalancerSecurityGroup.GroupId
       Type: 
@@ -717,7 +718,7 @@ Resources:
               - !Ref WorkspacesALBHTTPTargetGroup
               - !Ref WorkspacesNLBHTTPTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
-      Port: !Ref HttpPort
+      Port: !Ref WorkspacesHttpPort
       Protocol: 
         Fn::If:
           - HASALB
@@ -736,7 +737,7 @@ Resources:
               - !Ref WorkspacesALBGRPCTargetGroup
               - !Ref WorkspacesNLBGRPCTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
-      Port: !Ref GrpcPort
+      Port: !Ref WorkspacesGrpcPort
       Protocol: 
         Fn::If:
           - HASALB
@@ -753,7 +754,7 @@ Resources:
       Matcher:
         HttpCode: '200'
       Name: !Sub "${WorkspacesName}-HttpTargetGroup"
-      Port: !Ref HttpPort
+      Port: !Ref WorkspacesHttpPort
       Protocol: HTTP
       TargetGroupAttributes:
       - Key: stickiness.enabled
@@ -766,7 +767,7 @@ Resources:
         Value: '20'
       Targets:
       - Id: !Ref WorkspacesServer
-        Port: !Ref HttpPort
+        Port: !Ref WorkspacesHttpPort
       VpcId: !Ref Vpc
 
   WorkspacesNLBHTTPTargetGroup:
@@ -777,7 +778,7 @@ Resources:
       HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 15
       Name: !Sub "${WorkspacesName}-HttpTargetGroup"
-      Port: !Ref HttpPort
+      Port: !Ref WorkspacesHttpPort
       Protocol: TCP
       TargetGroupAttributes:
       - Key: stickiness.enabled
@@ -788,7 +789,7 @@ Resources:
         Value: '20'
       Targets:
       - Id: !Ref WorkspacesServer
-        Port: !Ref HttpPort
+        Port: !Ref WorkspacesHttpPort
       VpcId: !Ref Vpc
 
   WorkspacesALBGRPCTargetGroup:
@@ -802,7 +803,7 @@ Resources:
       Matcher: 
         GrpcCode: '0'
       Name: !Sub "${WorkspacesName}-GrpcTargetGroup"
-      Port: !Ref GrpcPort
+      Port: !Ref WorkspacesGrpcPort
       Protocol: HTTPS
       ProtocolVersion: GRPC
       TargetGroupAttributes:
@@ -816,7 +817,7 @@ Resources:
         Value: '20'
       Targets:
       - Id: !Ref WorkspacesServer
-        Port: !Ref GrpcPort
+        Port: !Ref WorkspacesGrpcPort
       VpcId: !Ref Vpc
 
   WorkspacesNLBGRPCTargetGroup:
@@ -828,7 +829,7 @@ Resources:
       HealthCheckTimeoutSeconds: 15
       HealthyThresholdCount: 5
       Name: !Sub "${WorkspacesName}-GrpcTargetGroup"
-      Port: !Ref GrpcPort
+      Port: !Ref WorkspacesGrpcPort
       Protocol: TCP
       TargetGroupAttributes:
       - Key: stickiness.enabled
@@ -839,7 +840,7 @@ Resources:
         Value: '20'
       Targets:
       - Id: !Ref WorkspacesServer
-        Port: !Ref GrpcPort
+        Port: !Ref WorkspacesGrpcPort
       VpcId: !Ref Vpc
 
   WorkspacesSecurityGroup:
@@ -850,8 +851,8 @@ Resources:
       GroupDescription: "Enable access to workspaces server over http and grpc"
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: !Ref HttpPort
-          ToPort: !Ref HttpPort
+          FromPort: !Ref WorkspacesHttpPort
+          ToPort: !Ref WorkspacesHttpPort
           SourceSecurityGroupId: 
             Fn::If:
               - HASLB
@@ -865,8 +866,8 @@ Resources:
               - !Ref AWS::NoValue
               - !Ref AccessCIDR
         - IpProtocol: tcp
-          FromPort: !Ref GrpcPort
-          ToPort: !Ref GrpcPort
+          FromPort: !Ref WorkspacesGrpcPort
+          ToPort: !Ref WorkspacesGrpcPort
           SourceSecurityGroupId: 
             Fn::If:
               - HASLB
