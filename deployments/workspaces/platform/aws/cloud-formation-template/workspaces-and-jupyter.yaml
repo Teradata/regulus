@@ -35,10 +35,17 @@ Metadata:
           - PersistentVolumeSize
           - ExistingPersistentVolumeId
           - PersistentVolumeDeletionPolicy
+      - Label:
+          default: "Jupyter connection"
+        Parameters:
+          - JupyterToken
+          - JupyterHttpPort
+          - JupyterVersion
 
 Description: >-
-  AWS CloudFormation Template Workspaces: Workspaces is a instance based service for deploying
-  and suspending regulus clusters, and managing project lifecycles. 
+  AWS CloudFormation Template Workspaces with Jupyter: Workspaces is a instance based service for deploying
+  and suspending regulus clusters, and managing project lifecycles. This template also includes a Jupyter Lab
+  service running on the same host, suitable for demonstration environments. 
   Note: You will be billed for the AWS resources used if you create a stack from this template.
 
 Parameters:
@@ -56,6 +63,16 @@ Parameters:
     MaxLength: '20'
     MinLength: '1'
     Type: String
+
+  JupyterToken:
+    Type: String
+    NoEcho: true
+    Description: The token or password equivalent used to access Jupyter.
+    AllowedPattern: '^[a-zA-Z][a-zA-Z0-9-]*'
+    ConstraintDescription: must begin with a letter and contain only alphanumeric characters.
+    Description: The jupyter service instance name
+    #MaxLength: '64'
+    #MinLength: '16'
 
   Private:
     Description: Will Workspaces be deployed in a private netowrk without public IPs?
@@ -143,10 +160,23 @@ Parameters:
     MinValue: 0
     MaxValue: 65535
 
+  JupyterHttpPort:
+    ConstraintDescription: must be a valid ununsed port between 0 and 65535.
+    Description: port to access the workspaces service ui.
+    Type: Number
+    Default: 8888
+    MinValue: 0
+    MaxValue: 65535
+
   WorkspacesVersion:
     Type: String
     Default: latest
     Description: Which version of workspaces to deploy, uses container version tags, defaults to "latest"
+
+  JupyterVersion:
+    Type: String
+    Default: latest
+    Description: Which version of jupyter to deploy, uses container version tags, defaults to "latest"
 
   RootVolumeSize:
     ConstraintDescription: Size in GB, between 10 and 1000.
@@ -203,30 +233,14 @@ Parameters:
 
   InstanceType:
     AllowedValues:
-    - t2.nano
-    - t2.micro
-    - t2.small
-    - t2.medium
-    - t2.large
-    - t3.nano
-    - t3.micro
     - t3.small
     - t3.medium
     - t3.large
-    - m3.medium
-    - m3.large
-    - m3.xlarge
-    - m3.2xlarge
     - m4.large
     - m4.xlarge
     - m4.2xlarge
     - m4.4xlarge
     - m4.10xlarge
-    - c3.large
-    - c3.xlarge
-    - c3.2xlarge
-    - c3.4xlarge
-    - c3.8xlarge
     - c4.large
     - c4.xlarge
     - c4.2xlarge
@@ -242,7 +256,7 @@ Parameters:
     - i2.4xlarge
     - i2.8xlarge
     ConstraintDescription: must be a valid EC2 instance type.
-    Default: t2.micro
+    Default: t3.small
     Description: Workspaces EC2 instance type
     Type: String
 
@@ -271,7 +285,7 @@ Rules:
             - Fn::ValueOfAll:
               - AWS::EC2::Subnet::Id
               - VpcId
-            - Ref: Vpc
+            - !Ref Vpc
         AssertDescription: The subnet you selected is not in the VPC
   instanceTypeInZone:
     Assertions:
@@ -342,7 +356,7 @@ Resources:
     Condition: USENEWPERSISTENTVOLUME
     Type: AWS::EC2::Volume
     DeletionPolicy: !Ref PersistentVolumeDeletionPolicy
-    Properties:
+    Properties: 
       AvailabilityZone: !Ref AvailabilityZone
       Size: !Ref PersistentVolumeSize
       Encrypted: true
@@ -372,7 +386,9 @@ Resources:
               - !Ref AWS::NoValue
             - install_docker
             - configure_workspaces_service
+            - configure_jupyter_service
             - start_workspaces_service
+            - start_jupyter_service
         prepare_directory:
           commands:
             1_mkdir:
@@ -413,14 +429,14 @@ Resources:
                 TimeoutStartSec=0
                 Restart=always
                 RestartSec=2
-                ExecStartPre=-/usr/bin/mkdir -p /etc/td
+                ExecStartPre=-/usr/bin/mkdir -p /etc/td/workspaces
                 ExecStartPre=-/usr/bin/docker exec %n stop || true
                 ExecStartPre=-/usr/bin/docker rm %n || true
                 ExecStartPre=/usr/bin/docker pull teradata/regulus-workspaces:${ WorkspacesVersion }
                 ExecStart=/usr/bin/docker run \
                     -e accept_license=Y \
                     -e PLATFORM=aws \
-                    -v /etc/td:/etc/td \
+                    -v /etc/td/workspaces:/etc/td \
                     -p ${ WorkspacesHttpPort }:3000 \
                     -p ${ WorkspacesGrpcPort }:3282 \
                     --rm --name %n teradata/regulus-workspaces:${ WorkspacesVersion } workspaces serve -v
@@ -436,6 +452,43 @@ Resources:
               workspaces:
                 enabled: "true"
                 ensureRunning: "true"
+        configure_jupyter_service:
+          files:
+            /usr/lib/systemd/system/jupyter.service:
+              content: !Sub |
+                [Unit]
+                Description=jupyter
+                After=docker.service
+                Requires=docker.service
+                StartLimitInterval=200
+                StartLimitBurst=10
+
+                [Service]
+                TimeoutStartSec=0
+                Restart=always
+                RestartSec=2
+                ExecStartPre=-/usr/bin/mkdir -p /etc/td/jupyter
+                ExecStartPre=-/usr/bin/docker exec %n stop || true
+                ExecStartPre=-/usr/bin/docker rm %n || true
+                ExecStartPre=/usr/bin/docker pull teradata/regulus-jupyter:${ JupyterVersion }
+                ExecStart=/usr/bin/docker run \
+                    -e accept_license=Y \
+                    -e JUPYTER_TOKEN=${ JupyterToken } \
+                    -v /etc/td/jupyter:/home/jovyan/JupyterLabRoot/userdata \
+                    -p ${ JupyterHttpPort }:8888 \
+                    --rm --name %n teradata/regulus-jupyter:${ JupyterVersion }
+
+                [Install]
+                WantedBy=multi-user.target
+              group: root
+              mode: '000400'
+              owner: root
+        start_jupyter_service:
+          services:
+            systemd:
+              jupyter:
+                enabled: "true"
+                ensureRunning: "true"
     Properties:
       PropagateTagsToVolumeOnCreation: true
       BlockDeviceMappings:
@@ -443,7 +496,7 @@ Resources:
           Ebs:
             VolumeSize: !Ref RootVolumeSize
             Encrypted: true
-      SubnetId: !Select [ 0, !Ref Subnets ]
+      SubnetId: !Ref Subnet
       ImageId: !Ref LatestAmiId
       InstanceType: !Ref InstanceType
       KeyName:
@@ -490,6 +543,10 @@ Resources:
         FromPort: !Ref WorkspacesGrpcPort
         IpProtocol: tcp
         ToPort: !Ref WorkspacesGrpcPort
+      - CidrIp: !Ref AccessCIDR
+        FromPort: !Ref JupyterHttpPort
+        IpProtocol: tcp
+        ToPort: !Ref JupyterHttpPort
 
   LoadBalancer:
     Condition: HASLB
@@ -518,6 +575,25 @@ Resources:
               - !Ref WorkspacesNLBHTTPTargetGroup
       LoadBalancerArn: !Ref LoadBalancer
       Port: !Ref WorkspacesHttpPort
+      Protocol: 
+        Fn::If:
+          - HASALB
+          - HTTP
+          - TCP
+
+  JupyterHTTPListener:
+    Condition: HASLB
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: 
+            Fn::If:
+              - HASALB
+              - !Ref JupyterALBHTTPTargetGroup
+              - !Ref JupyterNLBHTTPTargetGroup
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: !Ref JupyterHttpPort
       Protocol: 
         Fn::If:
           - HASALB
@@ -569,6 +645,32 @@ Resources:
         Port: !Ref WorkspacesHttpPort
       VpcId: !Ref Vpc
 
+  JupyterALBHTTPTargetGroup:
+    Condition: HASALB
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 15
+      Matcher:
+        HttpCode: '200'
+      Name: !Sub "${WorkspacesName}-j-http"
+      Port: !Ref JupyterHttpPort
+      Protocol: HTTP
+      TargetGroupAttributes:
+      - Key: stickiness.enabled
+        Value: true
+      - Key: stickiness.type
+        Value: app_cookie 
+      - Key: stickiness.app_cookie.cookie_name
+        Value: TDJUPYTERHTTPSSESSION
+      - Key: deregistration_delay.timeout_seconds
+        Value: '20'
+      Targets:
+      - Id: !Ref WorkspacesServer
+        Port: !Ref JupyterHttpPort
+      VpcId: !Ref Vpc
+
   WorkspacesNLBHTTPTargetGroup:
     Condition: HASNLB
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -589,6 +691,28 @@ Resources:
       Targets:
       - Id: !Ref WorkspacesServer
         Port: !Ref WorkspacesHttpPort
+      VpcId: !Ref Vpc
+
+  JupyterNLBHTTPTargetGroup:
+    Condition: HASNLB
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckIntervalSeconds: 30
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 15
+      Name: !Sub "${WorkspacesName}-j-http"
+      Port: !Ref JupyterHttpPort
+      Protocol: TCP
+      TargetGroupAttributes:
+      - Key: stickiness.enabled
+        Value: true
+      - Key: stickiness.type
+        Value: source_ip
+      - Key: deregistration_delay.timeout_seconds
+        Value: '20'
+      Targets:
+      - Id: !Ref WorkspacesServer
+        Port: !Ref JupyterHttpPort
       VpcId: !Ref Vpc
 
   WorkspacesALBGRPCTargetGroup:
@@ -665,196 +789,23 @@ Resources:
               - !Ref AWS::NoValue
               - !Ref AccessCIDR
         - IpProtocol: tcp
+          FromPort: !Ref JupyterHttpPort
+          ToPort: !Ref JupyterHttpPort
+          SourceSecurityGroupId: 
+            Fn::If:
+              - HASLB
+              - Fn::GetAtt:
+                  - LoadBalancerSecurityGroup
+                  - GroupId
+              - !Ref AWS::NoValue
+          CidrIp: 
+            Fn::If:
+              - HASLB
+              - !Ref AWS::NoValue
+              - !Ref AccessCIDR
+        - IpProtocol: tcp
           FromPort: !Ref WorkspacesGrpcPort
           ToPort: !Ref WorkspacesGrpcPort
-          SourceSecurityGroupId: 
-            Fn::If:
-              - HASLB
-              - Fn::GetAtt:
-                  - LoadBalancerSecurityGroup
-                  - GroupId
-              - !Ref AWS::NoValue
-          CidrIp: 
-            Fn::If:
-              - HASLB
-              - !Ref AWS::NoValue
-              - !Ref AccessCIDR
-
-  LoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Scheme: internet-facing
-      Subnets: !Ref Subnets 
-      SecurityGroups:
-        - !GetAtt LoadBalancerSecurityGroup.GroupId
-      Type: 
-        Fn::If:
-          - HASALB
-          - application
-          - network
-
-  HTTPListener:
-    Condition: HASLB
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: 
-            Fn::If:
-              - HASALB
-              - !Ref WorkspacesALBHTTPTargetGroup
-              - !Ref WorkspacesNLBHTTPTargetGroup
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: !Ref HttpPort
-      Protocol: 
-        Fn::If:
-          - HASALB
-          - HTTP
-          - TCP
-
-  GRPCListener:
-    Condition: HASLB
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: 
-            Fn::If:
-              - HASALB
-              - !Ref WorkspacesALBGRPCTargetGroup
-              - !Ref WorkspacesNLBGRPCTargetGroup
-      LoadBalancerArn: !Ref LoadBalancer
-      Port: !Ref GrpcPort
-      Protocol: 
-        Fn::If:
-          - HASALB
-          - HTTPS
-          - TCP
-
-  WorkspacesALBHTTPTargetGroup:
-    Condition: HASALB
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 15
-      Matcher:
-        HttpCode: '200'
-      Name: !Sub "${WorkspacesName}-HttpTargetGroup"
-      Port: !Ref HttpPort
-      Protocol: HTTP
-      TargetGroupAttributes:
-      - Key: stickiness.enabled
-        Value: true
-      - Key: stickiness.type
-        Value: app_cookie 
-      - Key: stickiness.app_cookie.cookie_name
-        Value: TDWORKSPACESHTTPSSESSION
-      - Key: deregistration_delay.timeout_seconds
-        Value: '20'
-      Targets:
-      - Id: !Ref WorkspacesServer
-        Port: !Ref HttpPort
-      VpcId: !Ref Vpc
-
-  WorkspacesNLBHTTPTargetGroup:
-    Condition: HASNLB
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 15
-      Name: !Sub "${WorkspacesName}-HttpTargetGroup"
-      Port: !Ref HttpPort
-      Protocol: TCP
-      TargetGroupAttributes:
-      - Key: stickiness.enabled
-        Value: true
-      - Key: stickiness.type
-        Value: source_ip
-      - Key: deregistration_delay.timeout_seconds
-        Value: '20'
-      Targets:
-      - Id: !Ref WorkspacesServer
-        Port: !Ref HttpPort
-      VpcId: !Ref Vpc
-
-  WorkspacesALBGRPCTargetGroup:
-    Condition: HASALB
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckProtocol: HTTPS
-      HealthCheckTimeoutSeconds: 15
-      HealthyThresholdCount: 5
-      Matcher: 
-        GrpcCode: '0'
-      Name: !Sub "${WorkspacesName}-GrpcTargetGroup"
-      Port: !Ref GrpcPort
-      Protocol: HTTPS
-      ProtocolVersion: GRPC
-      TargetGroupAttributes:
-      - Key: stickiness.enabled
-        Value: true
-      - Key: stickiness.type
-        Value: app_cookie
-      - Key: stickiness.app_cookie.cookie_name
-        Value: TDWORKSPACESGRPCSESSION
-      - Key: deregistration_delay.timeout_seconds
-        Value: '20'
-      Targets:
-      - Id: !Ref WorkspacesServer
-        Port: !Ref GrpcPort
-      VpcId: !Ref Vpc
-
-  WorkspacesNLBGRPCTargetGroup:
-    Condition: HASNLB
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      HealthCheckIntervalSeconds: 30
-      HealthCheckProtocol: HTTP
-      HealthCheckTimeoutSeconds: 15
-      HealthyThresholdCount: 5
-      Name: !Sub "${WorkspacesName}-GrpcTargetGroup"
-      Port: !Ref GrpcPort
-      Protocol: TCP
-      TargetGroupAttributes:
-      - Key: stickiness.enabled
-        Value: true
-      - Key: stickiness.type
-        Value: source_ip
-      - Key: deregistration_delay.timeout_seconds
-        Value: '20'
-      Targets:
-      - Id: !Ref WorkspacesServer
-        Port: !Ref GrpcPort
-      VpcId: !Ref Vpc
-
-  WorkspacesSecurityGroup:
-    Condition: HASCIDR
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      VpcId: !Ref Vpc
-      GroupDescription: "Enable access to workspaces server over http and grpc"
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: !Ref HttpPort
-          ToPort: !Ref HttpPort
-          SourceSecurityGroupId: 
-            Fn::If:
-              - HASLB
-              - Fn::GetAtt:
-                  - LoadBalancerSecurityGroup
-                  - GroupId
-              - !Ref AWS::NoValue
-          CidrIp: 
-            Fn::If:
-              - HASLB
-              - !Ref AWS::NoValue
-              - !Ref AccessCIDR
-        - IpProtocol: tcp
-          FromPort: !Ref GrpcPort
-          ToPort: !Ref GrpcPort
           SourceSecurityGroupId: 
             Fn::If:
               - HASLB
@@ -1033,6 +984,11 @@ Outputs:
     Description: Loadbalancer access endpoint for API Access
     Value: !Sub "${ LoadBalancer.DNSName }:${ WorkspacesGrpcPort }"
 
+  LoadBalancerJupyterUIAccess:
+    Condition: HASLB
+    Description: Loadbalancer access endpoint for API Access
+    Value: !Sub "${ LoadBalancer.DNSName }:${ JupyterHttpPort }?token=${ JupyterToken }"
+
   WorkspacesPublicHttpAccess:
     Condition: HASPUBLICIP 
     Description: Teradata Workspaces Server
@@ -1041,6 +997,19 @@ Outputs:
   WorkspacesPrivateHttpAccess:
     Description: Teradata Workspaces Server
     Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ WorkspacesHttpPort }"
+
+  JupyterPublicHttpAccess:
+    Condition: HASPUBLICIP 
+    Description: Teradata Workspaces Server
+    Value: !Sub "http://${WorkspacesServer.PublicDnsName}:${ JupyterHttpPort }?token=${ JupyterToken }"
+
+  JupyterPrivateHttpAccess:
+    Description: Teradata jupyter Server
+    Value: !Sub "http://${WorkspacesServer.PrivateDnsName}:${ JupyterHttpPort }?token=${ JupyterToken }"
+
+  JupyterInternalAccessToWorkspaces:
+    Description: Workspaces endpoint for local Jupyter access
+    Value: !Sub "localhost:${ WorkspacesGrpcPort }"
 
   SecurityGroup:
     Description: Workspaces Security Group
