@@ -381,9 +381,13 @@ Resources:
                 - prepare_new_storage
                 - !Ref AWS::NoValue
             - Fn::If: 
-              - USEPERSISTENTVOLUME
-              - mount_storage
-              - !Ref AWS::NoValue
+                - USEPERSISTENTVOLUME
+                - bind_storage
+                - !Ref AWS::NoValue
+            - Fn::If: 
+                - USEPERSISTENTVOLUME
+                - mount_storage
+                - !Ref AWS::NoValue
             - install_docker
             - configure_workspaces_service
             - configure_jupyter_service
@@ -391,17 +395,28 @@ Resources:
             - start_jupyter_service
         prepare_directory:
           commands:
-            1_mkdir:
-              command: mkdir -p /etc/td
+            mkdir:
+              command: !Sub |
+                #!/bin/bash -xe
+                mkdir -p /etc/td
         prepare_new_storage:
           commands:
-            1_mkfs:
-              command: mkfs -t ext4 /dev/nvme1n1
+            mkfs:
+              command: !Sub |
+                #!/bin/bash -xe
+                mkfs -t ext4 /dev/nvme1n1
+        bind_storage:
+          commands:
+            fstab:
+              command: !Sub |
+                #!/bin/bash -xe
+                echo "/dev/nvme1n1 /etc/td ext4 defaults 0 2" >> /etc/fstab
         mount_storage:
-            1_fstab:
-              command: echo "/dev/nvme1n1 /etc/td ext4 defaults 0 2" >> /etc/fstab
-            2_mount:
-              command: mount -a
+          commands:
+            mount:
+              command: !Sub |
+                #!/bin/bash -xe
+                mount -a
         install_docker:
           commands:
             install_docker:

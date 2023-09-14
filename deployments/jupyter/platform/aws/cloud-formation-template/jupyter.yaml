@@ -207,11 +207,6 @@ Parameters:
 
   InstanceType:
     AllowedValues:
-    - t2.nano
-    - t2.micro
-    - t2.small
-    - t2.medium
-    - t2.large
     - t3.nano
     - t3.micro
     - t3.small
@@ -246,7 +241,7 @@ Parameters:
     - i2.4xlarge
     - i2.8xlarge
     ConstraintDescription: must be a valid EC2 instance type.
-    Default: t2.micro
+    Default: t3.micro
     Description: jupyter EC2 instance type
     Type: String
 
@@ -375,25 +370,40 @@ Resources:
                 - prepare_new_storage
                 - !Ref AWS::NoValue
             - Fn::If: 
-              - USEPERSISTENTVOLUME
-              - mount_storage
-              - !Ref AWS::NoValue
+                - USEPERSISTENTVOLUME
+                - bind_storage
+                - !Ref AWS::NoValue
+            - Fn::If: 
+                - USEPERSISTENTVOLUME
+                - mount_storage
+                - !Ref AWS::NoValue
             - install_docker
             - configure_jupyter_service
             - start_jupyter_service
         prepare_directory:
           commands:
-            1_mkdir:
-              command: mkdir -p /etc/td
+            mkdir:
+              command: !Sub |
+                #!/bin/bash -xe
+                /usr/bin/mkdir -p /etc/td
         prepare_new_storage:
           commands:
-            1_mkfs:
-              command: mkfs -t ext4 /dev/nvme1n1
+            mkfs:
+              command: !Sub |
+                #!/bin/bash -xe
+                /usr/sbin/mkfs -t ext4 /dev/nvme1n1
+        bind_storage:
+          commands:
+            fstab:
+              command: !Sub |
+                #!/bin/bash -xe
+                /usr/bin/echo "/dev/nvme1n1 /etc/td ext4 defaults 0 2" >> /etc/fstab
         mount_storage:
-            1_fstab:
-              command: echo "/dev/nvme1n1 /etc/td ext4 defaults 0 2" >> /etc/fstab
-            2_mount:
-              command: mount -a
+          commands:
+            mount:
+              command: !Sub |
+                #!/bin/bash -xe
+                /usr/bin/mount -a
         install_docker:
           commands:
             install_docker:
