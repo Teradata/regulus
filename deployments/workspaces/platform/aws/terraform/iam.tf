@@ -10,8 +10,11 @@ data "aws_iam_policy_document" "instance-assume-role-policy" {
 }
 
 resource "aws_iam_role" "this" {
+  # TODO ALLOW specifying role name or prefix
+  # TODO ALLOW using exising role
   name               = join("-", [var.workspaces_name, "role"])
   assume_role_policy = data.aws_iam_policy_document.instance-assume-role-policy.json
+  # TODO ADD permissions_boundary
 }
 
 resource "aws_iam_instance_profile" "this" {
@@ -37,6 +40,8 @@ data "aws_iam_policy_document" "this" {
       "iam:ListRolePolicies",
       "iam:PutRolePolicy",
       "iam:RemoveRoleFromInstanceProfile",
+      "iam:TagRole",
+      "iam:TagInstanceProfile",
       "ec2:TerminateInstances",
       "ec2:RunInstances",
       "ec2:RevokeSecurityGroupEgress",
@@ -74,7 +79,8 @@ data "aws_iam_policy_document" "this" {
       "secretsmanager:DescribeSecret",
       "secretsmanager:GetResourcePolicy",
       "secretsmanager:GetSecretValue",
-      "secretsmanager:PutSecretValue"
+      "secretsmanager:PutSecretValue",
+      "secretsmanager:TagResource"
     ]
 
     resources = ["*"] # TODO increase retrictions

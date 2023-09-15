@@ -29,6 +29,8 @@ will deploy.
               "iam:ListRolePolicies",
               "iam:PutRolePolicy",
               "iam:RemoveRoleFromInstanceProfile",
+              "iam:TagRole",
+              "iam:TagInstanceProfile",
               "ec2:TerminateInstances",
               "ec2:RunInstances",
               "ec2:RevokeSecurityGroupEgress",
@@ -66,7 +68,8 @@ will deploy.
               "secretsmanager:DescribeSecret",
               "secretsmanager:GetResourcePolicy",
               "secretsmanager:GetSecretValue",
-              "secretsmanager:PutSecretValue"
+              "secretsmanager:PutSecretValue",
+              "secretsmanager:TagResource"
           ],
           "Resource": "*",
           "Effect": "Allow"
@@ -99,6 +102,8 @@ which includes the permissions needed to create regulus instances
               "iam:ListRolePolicies",
               "iam:PutRolePolicy",
               "iam:RemoveRoleFromInstanceProfile",
+              "iam:TagRole",
+              "iam:TagInstanceProfile",
               "ec2:TerminateInstances",
               "ec2:RunInstances",
               "ec2:RevokeSecurityGroupEgress",
@@ -136,7 +141,8 @@ which includes the permissions needed to create regulus instances
               "secretsmanager:DescribeSecret",
               "secretsmanager:GetResourcePolicy",
               "secretsmanager:GetSecretValue",
-              "secretsmanager:PutSecretValue"
+              "secretsmanager:PutSecretValue",
+              "secretsmanager:TagResource"
           ],
           "Resource": "*",
           "Effect": "Allow"

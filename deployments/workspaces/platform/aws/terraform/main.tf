@@ -17,4 +17,5 @@ terraform {
 
 provider "aws" {
   region = var.region
+  # TODO add default tags at provider level
 }
