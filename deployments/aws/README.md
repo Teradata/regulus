@@ -1,3 +1,55 @@
+# Workspaces and Jupyter Deployments for AWS
+
+## Cloud Formations Templates
+
+### Deployent via CLI
+
+### Deployment Commands
+
+aws cloudformation create-stack --stack-name predeployed \
+  --template-body file:///Users/jack.lauritsen/Code/Teradata-Public/regulus/deployments/workspaces/platform/aws/cloud-formation-template/workspaces-and-jupyter.yaml \
+  --parameters file:///Users/jack.lauritsen/Code/Teradata-Public/regulus/deployments/workspaces/platform/aws/cloud-formation-template/parameters.json \
+  --tags Key=ThisIsAKey,Value=AndThisIsAValue \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+
+aws cloudformation create-stack --stack-name all-in-one \
+  --template-body file://deployments/aws/all-in-one.yaml \
+  --parameters file://deployments/aws/parameters/all-in-one.json \
+  --tags Key=ThisIsAKey,Value=AndThisIsAValue \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+
+StackId: arn:aws:cloudformation:us-west-2:989207584854:stack/predeployed/fbeadf00-5891-11ee-8a2b-026dfbaa8503
+
+# -----------------------------------------------------
+
+aws cloudformation deploy --stack-name newclideployed \
+  --template-file /Users/jack.lauritsen/Code/Teradata-Public/regulus/deployments/workspaces/platform/aws/cloud-formation-template/workspaces-and-jupyter.yaml \
+  --parameter-overrides file:///Users/jack.lauritsen/Code/Teradata-Public/regulus/deployments/workspaces/platform/aws/cloud-formation-template/parameters.json \
+  --tags ThisIsAKey=ThisIsAValue YetAnotherKey=WithANewValue \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM
+
+# -----------------------------------------------------
+
+
+  --parameter-overrides \
+    AccessCIDR=104.28.85.232/32 \
+    AvailabilityZone=us-west-2c \
+    JupyterToken=G041t \
+    LoadBalancerScheme=internet-facing \
+    LoadBalancing=NetworkLoadBalancer \
+    PersistentVolumeDeletionPolicy=Retain \
+    PersistentVolumeSize="20" \
+    RootVolumeSize="20" \
+    Session="true" \
+    Private="true" \
+    Subnet=subnet-0110919a1c3044611 \
+    UsePersistentVolume=None \
+    Vpc=vpc-0727eff21a8b49e0c \
+    WorkspacesName=test-cli-3 \
+    TerminationProtection="false" \
+    IamRole="" \
+    KeyName="" \
+
 # Example IAM Policies 
 
 If the account deploying workspaces does not have sufficient IAM permissions to create IAM roles or IAM policies,

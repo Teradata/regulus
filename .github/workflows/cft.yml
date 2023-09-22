@@ -31,3 +31,13 @@ jobs:
         cloudformation_directory: './deployments/aws/'
         scanner: "checkov"
 
+  cloudformation-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Cloud Formation Formatter
+        run: |
+          gh release download --repo aws-cloudformation/rain --pattern "*_linux-amd64.zip" --output "rain.zip"
+          unzip -j "rain.zip" "*/rain"  
+      - name: Check Formatting
+        run: ./rain fmt --verify ./deployments/aws/*.yaml

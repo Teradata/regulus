@@ -1,7 +1,15 @@
 [
   {
     "ParameterKey": "AccessCIDR",
-    "ParameterValue": "0.0.0.0/0"
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "PrefixList",
+    "ParameterValue": ""
+  },
+  {
+    "ParameterKey": "SecurityGroup",
+    "ParameterValue": ""
   },
   {
     "ParameterKey": "AvailabilityZone",

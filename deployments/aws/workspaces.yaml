@@ -31,6 +31,8 @@ Metadata:
           # - ApplicationLoadBalancerSubnets
           - KeyName
           - AccessCIDR
+          - PrefixList
+          - SecurityGroup
           - WorkspacesHttpPort
           - WorkspacesGrpcPort
           - WorkspacesVersion
@@ -254,11 +256,18 @@ Parameters:
   AccessCIDR:
     Description: The IP address range that can be used to communicate with the workspaces instance.
     Type: String
-    Default: 0.0.0.0/0
-    AllowedPattern: (\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2})
+    AllowedPattern: ((\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})\/(\d{1,2}))|^$
     ConstraintDescription: must be a valid IP CIDR range of the form x.x.x.x/x.
-    MaxLength: "18"
-    MinLength: "9"
+
+  PrefixList:
+    Description: The PrefixList that can be used to communicate with the workspaces instance.
+    Type: String
+    ConstraintDescription: must be a valid prefixlist
+
+  SecurityGroup:
+    Description: The SecurityGroup that can be used to communicate with the workspaces instance.
+    Type: String
+    ConstraintDescription: must be a valid securityGroup ID
 
 Rules:
   subnetsInVpc:
@@ -300,7 +309,41 @@ Conditions:
     - !Condition HASLB
     - !Condition HASCIDR
 
+  HASPREFIXLISTANDLB: !And
+    - !Condition HASLB
+    - !Condition HASPREFIXLIST
+
+  HASSECGROUPANDLB: !And
+    - !Condition HASLB
+    - !Condition HASSECURITYGROUP
+
+  HASLBORNOCIDR: !Or
+    - !Condition HASLB
+    - !Equals [!Ref AccessCIDR, ""]
+
+  HASLBORNOPREFIX: !Or
+    - !Condition HASLB
+    - !Equals [!Ref PrefixList, ""]
+
+  HASLBORNOSECURITYGROUP: !Or
+    - !Condition HASLB
+    - !Equals [!Ref SecurityGroup, ""]
+
   HASCIDR: !Not [!Equals [!Ref AccessCIDR, ""]]
+
+  HASPREFIXLIST: !Not [!Equals [!Ref PrefixList, ""]]
+
+  HASSECURITYGROUP: !Not [!Equals [!Ref SecurityGroup, ""]]
+
+  HASCIDRORPREFIXLISTORSECGROUP: !Or
+    - !Condition HASCIDR
+    - !Condition HASPREFIXLIST
+    - !Condition HASSECURITYGROUP
+
+  HASCIDRORPREFIXLISTORSECGROUPANDLB: !Or
+    - !Condition HASCIDRANDLB
+    - !Condition HASPREFIXLISTANDLB
+    - !Condition HASSECGROUPANDLB
 
   USESESSIONMANAGER: !Equals [!Ref Session, "true"]
 
@@ -485,15 +528,37 @@ Resources:
       VpcId: !Ref Vpc
       GroupDescription: Enable access to workspaces server from LoadBalancer over http, grpc, and ssh
       SecurityGroupIngress:
-        - CidrIp: !Ref AccessCIDR
-          FromPort: !Ref WorkspacesHttpPort
+        - FromPort: !Ref WorkspacesHttpPort
           IpProtocol: tcp
           ToPort: !Ref WorkspacesHttpPort
-        - CidrIp: !Ref AccessCIDR
-          FromPort: !Ref WorkspacesGrpcPort
+          CidrIp: !If
+            - HASCIDR
+            - !Ref AccessCIDR
+            - !Ref AWS::NoValue
+          SourcePrefixListId: !If
+            - HASPREFIXLIST
+            - !Ref PrefixList
+            - !Ref AWS::NoValue
+          SourceSecurityGroupId: !If
+            - HASSECURITYGROUP
+            - !Ref SecurityGroup
+            - !Ref AWS::NoValue
+        - FromPort: !Ref WorkspacesGrpcPort
           IpProtocol: tcp
           ToPort: !Ref WorkspacesGrpcPort
-    Condition: HASCIDRANDLB
+          CidrIp: !If
+            - HASCIDR
+            - !Ref AccessCIDR
+            - !Ref AWS::NoValue
+          SourcePrefixListId: !If
+            - HASPREFIXLIST
+            - !Ref PrefixList
+            - !Ref AWS::NoValue
+          SourceSecurityGroupId: !If
+            - HASSECURITYGROUP
+            - !Ref SecurityGroup
+            - !Ref AWS::NoValue
+    Condition: HASCIDRORPREFIXLISTORSECGROUPANDLB
 
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -647,6 +712,20 @@ Resources:
       VpcId: !Ref Vpc
       GroupDescription: Enable access to workspaces server over http and grpc
       SecurityGroupIngress:
+        - !If
+          - HASSECURITYGROUP
+          - IpProtocol: tcp
+            FromPort: !Ref WorkspacesHttpPort
+            ToPort: !Ref WorkspacesHttpPort
+            SourceSecurityGroupId: !Ref SecurityGroup
+          - !Ref AWS::NoValue
+        - !If
+          - HASSECURITYGROUP
+          - IpProtocol: tcp
+            FromPort: !Ref WorkspacesGrpcPort
+            ToPort: !Ref WorkspacesGrpcPort
+            SourceSecurityGroupId: !Ref SecurityGroup
+          - !Ref AWS::NoValue
         - IpProtocol: tcp
           FromPort: !Ref WorkspacesHttpPort
           ToPort: !Ref WorkspacesHttpPort
@@ -655,9 +734,13 @@ Resources:
             - !GetAtt LoadBalancerSecurityGroup.GroupId
             - !Ref AWS::NoValue
           CidrIp: !If
-            - HASLB
+            - HASLBORNOCIDR
             - !Ref AWS::NoValue
             - !Ref AccessCIDR
+          SourcePrefixListId: !If
+            - HASLBORNOPREFIX
+            - !Ref AWS::NoValue
+            - !Ref PrefixList
         - IpProtocol: tcp
           FromPort: !Ref WorkspacesGrpcPort
           ToPort: !Ref WorkspacesGrpcPort
@@ -666,10 +749,14 @@ Resources:
             - !GetAtt LoadBalancerSecurityGroup.GroupId
             - !Ref AWS::NoValue
           CidrIp: !If
-            - HASLB
+            - HASLBORNOCIDR
             - !Ref AWS::NoValue
             - !Ref AccessCIDR
-    Condition: HASCIDR
+          SourcePrefixListId: !If
+            - HASLBORNOPREFIX
+            - !Ref AWS::NoValue
+            - !Ref PrefixList
+    Condition: HASCIDRORPREFIXLISTORSECGROUP
 
   SecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
