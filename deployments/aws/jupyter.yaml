@@ -127,7 +127,7 @@ Parameters:
   AvailabilityZone:
     ConstraintDescription: must be the name of a existing subnet.
     Description: |
-      AvailabilityZ one to deploy the Jupyter service to.
+      Availability zone to deploy the Jupyter service to.
       This must match the subnet, the zone of any pre existing volumes if used, 
       and the instance type must be available in the selected zone.
     Type: AWS::EC2::AvailabilityZone::Name
@@ -183,10 +183,6 @@ Parameters:
     Description: Id of the existing persistent volume to attach. Must be int the same availability zone as the Jupyter instance.
     Type: String
     Default: None
-
-  # AvailabilityZone:
-  #   Description: The availablity zone of the the Jupyter instance and any persistent volume if a new or existing persistent volume is used, the Jupyter subnet must be in the same availablity zone.
-  #   Type: AWS::EC2::AvailabilityZone
 
   PersistentVolumeDeletionPolicy:
     Description: Behavior for the Persistent Volume when deleting the cloudformations deployment.
@@ -316,7 +312,7 @@ Conditions:
     - !Condition HASNLB
 
   NEEDSROLE:
-    !Equals [!Ref IamRole, '' ]
+    !Equals [!Ref IamRole, 'New' ]
 
   HASPUBLICIP:
     !Not [ !Equals [ !Ref Private, 'true' ] ]

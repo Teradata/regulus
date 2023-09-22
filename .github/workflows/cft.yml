@@ -1,0 +1,33 @@
+name: Lint CloudFormation Templates
+
+on: [push]
+
+jobs:
+
+  sast-cfn-lint:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: grolston/cfn-security@v2
+      with:
+        cloudformation_directory: './deployments/aws/'
+        scanner: "cfn-lint"
+
+  sast-cfn-nag:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: grolston/cfn-security@v2
+      with:
+        cloudformation_directory: './deployments/aws/'
+        scanner: "cfn-nag"
+
+  sast-checkov:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: grolston/cfn-security@v2
+      with:
+        cloudformation_directory: './deployments/aws/'
+        scanner: "checkov"
+
