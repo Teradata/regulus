@@ -1,8 +1,0 @@
-# resource_group_name = ""
-# region = ""
-# network_name = ""
-# subnet_name = ""
-resource_group_name = "ws-az-tf-test"
-region              = "West US"
-network_name        = "ws-az-tf-test"
-subnet_name         = "ws-az-tf-test"
