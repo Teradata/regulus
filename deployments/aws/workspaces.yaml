@@ -27,7 +27,6 @@ Metadata:
           - Session
           - Vpc
           - Subnet
-
           # - ApplicationLoadBalancerSubnets
           - KeyName
           - AccessCIDR
@@ -72,7 +71,6 @@ Parameters:
     AllowedValues:
       - None
       - NetworkLoadBalancer
-
       # - ApplicationLoadBalancer
     Default: NetworkLoadBalancer
 
@@ -238,6 +236,7 @@ Parameters:
     AllowedValues:
       - New
       - Existing
+    Default: New
 
   IamRoleName:
     Description: |
