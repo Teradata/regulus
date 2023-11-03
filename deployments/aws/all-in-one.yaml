@@ -254,6 +254,7 @@ Parameters:
     AllowedValues:
       - New
       - Existing
+    Default: New
 
   IamRoleName:
     Description: |
