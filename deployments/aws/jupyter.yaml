@@ -68,7 +68,7 @@ Parameters:
     MaxLength: "64"
 
   Private:
-    Description: Will Jupyter be deployed in a private netowrk without public IPs?
+    Description: Will Jupyter be deployed in a private network without public IPs?
     Type: String
     AllowedValues:
       - true

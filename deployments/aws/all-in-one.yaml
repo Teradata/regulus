@@ -73,7 +73,7 @@ Parameters:
     MaxLength: "64"
 
   Private:
-    Description: Will Workspaces be deployed in a private netowrk without public IPs?
+    Description: Will Workspaces be deployed in a private network without public IPs?
     Type: String
     AllowedValues:
       - true
@@ -880,6 +880,10 @@ Resources:
             - HASLBORNOCIDR
             - !Ref AWS::NoValue
             - !Ref AccessCIDR
+          SourcePrefixListId: !If
+            - HASLBORNOPREFIX
+            - !Ref AWS::NoValue
+            - !Ref PrefixList
         - IpProtocol: tcp
           FromPort: !Ref JupyterHttpPort
           ToPort: !Ref JupyterHttpPort

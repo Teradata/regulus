@@ -59,7 +59,7 @@ Parameters:
     MinLength: "1"
 
   Private:
-    Description: Will Workspaces be deployed in a private netowrk without public IPs?
+    Description: Will Workspaces be deployed in a private network without public IPs?
     Type: String
     AllowedValues:
       - true
